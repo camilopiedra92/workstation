@@ -73,13 +73,24 @@ gh = "2.97.0"
 # `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`, form and all: jq
 # tags releases as `jq-1.8.2`, ripgrep and delta publish bare numbers, the rest
 # carry a leading `v` that mise expects written off.
-starship = "1.26.0" # the prompt; not in apt at all
-eza = "0.23.5"      # ls, with icons the Nerd Font carries
-bat = "0.26.1"      # cat, with syntax highlighting
-fd = "10.4.2"       # find, and what FZF_DEFAULT_COMMAND calls
-ripgrep = "15.2.0"  # grep
-fzf = "0.74.3"      # the fuzzy picker fzf-tab drives
-zoxide = "0.10.0"   # cd, with frecency
-jq = "1.8.2"        # what statusline.sh parses its payload with
-delta = "0.19.2"    # git's pager
-uv = "0.12.5"       # Python packages, venvs and the CLIs in uv-tools.txt
+starship = "1.26.0"  # the prompt; not in apt at all
+eza = "0.23.5"       # ls, with icons the Nerd Font carries
+bat = "0.26.1"       # cat, with syntax highlighting
+fd = "10.4.2"        # find, and what FZF_DEFAULT_COMMAND calls
+ripgrep = "15.2.0"   # grep
+fzf = "0.74.3"       # the fuzzy picker fzf-tab drives
+zoxide = "0.10.0"    # cd, with frecency
+jq = "1.8.2"         # what statusline.sh parses its payload with
+delta = "0.19.2"     # git's pager
+uv = "0.12.5"        # Python packages, venvs and the CLIs in uv-tools.txt
+fastfetch = "2.67.1" # wsl/zsh/.zshrc's greeting; undeclared, it is command-not-found
+
+# The checks' own tools. check.sh runs them, the pre-commit hook runs check.sh,
+# and under --strict a missing tool is a FAIL rather than a skip -- so without
+# these, install.sh finishes and then every commit in this repo is blocked.
+#
+# Same versions windows/configuration.winget pins for the host and .github/
+# pins for CI. All three must agree or the same file gets three verdicts.
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+taplo = "0.10.0"
