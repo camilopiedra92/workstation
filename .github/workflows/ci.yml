@@ -1,0 +1,194 @@
+# CI does not define any checks of its own: the first job installs what the
+# runner is missing and then calls ./check.sh, the same script the pre-commit
+# hook runs. Checks written in two places drift, and the moment CI and local
+# disagree you stop trusting either one.
+#
+# This repo spans two platforms, and so does CI. check.sh's own header
+# explains the split: almost everything here validates file content -- YAML,
+# JSON, TOML, shell -- which needs the files and not an operating system, so
+# ubuntu-checks runs it. The handful of things that need a real Windows host
+# with winget live in windows-checks instead, and run only what nothing else
+# can answer.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only by default: nothing here needs to write to the repo, and a
+# workflow that cannot write cannot be turned into a supply-chain foothold.
+permissions:
+  contents: read
+
+# A second push makes the first run irrelevant; cancel it instead of paying
+# for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ubuntu-checks:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to a commit SHA rather than a tag: a tag can be moved to point
+      # at different code, a SHA cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Tools are downloaded at a pinned version instead of taken from the
+      # runner's image, which drifts underneath you: a linter that reports a
+      # different code for the same construct after an image update is a
+      # linter you stop trusting.
+      #
+      # These versions match what windows/configuration.winget pins for the
+      # host's authoring-tools group, so CI and the machine run the same
+      # binaries on the same file. Bump both together -- bump-tools.sh does.
+      - name: Install tools
+        env:
+          SHELLCHECK_VERSION: 0.11.0
+          SHFMT_VERSION: 3.13.1
+          # Bare, no leading v: actionlint's tag carries one but its
+          # filenames do not, and both spellings appear below.
+          ACTIONLINT_VERSION: 1.7.12
+          TAPLO_VERSION: 0.10.0
+        run: |
+          # Downloading a binary and running it is only safe if you know what
+          # you got, and a checksum published beside the artifact is no help;
+          # the expected hashes live in this repo. See tool-checksums.txt.
+          verify() { # verify <downloaded file> <name recorded in the checksum file>
+            local expected actual
+            expected=$(awk -v n="$2" '$2 == n { print $1 }' .github/tool-checksums.txt)
+            # No recorded hash means an artifact nobody has vetted. Fail
+            # rather than install something unverified.
+            [ -n "$expected" ] || { echo "::error::no checksum recorded for $2"; exit 1; }
+            actual=$(sha256sum "$1" | cut -d' ' -f1)
+            [ "$actual" = "$expected" ] || {
+              echo "::error::checksum mismatch for $2: got $actual, expected $expected"
+              exit 1
+            }
+          }
+
+          sc_file="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${sc_file}" -o "$sc_file"
+          verify "$sc_file" "$sc_file"
+          tar -xJf "$sc_file" --strip-components=1 -C /usr/local/bin "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+
+          fmt_file="shfmt_v${SHFMT_VERSION}_linux_amd64"
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/${fmt_file}" -o "$fmt_file"
+          verify "$fmt_file" "$fmt_file"
+          install -m 755 "$fmt_file" /usr/local/bin/shfmt
+
+          # taplo ships a bare gzipped binary rather than an archive.
+          tp_file="taplo-linux-x86_64.gz"
+          curl -fsSL "https://github.com/tamasfe/taplo/releases/download/${TAPLO_VERSION}/${tp_file}" -o "$tp_file"
+          verify "$tp_file" "$tp_file"
+          gunzip -c "$tp_file" > taplo
+          install -m 755 taplo /usr/local/bin/taplo
+
+          al_file="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${al_file}" -o "$al_file"
+          verify "$al_file" "$al_file"
+          tar -xzf "$al_file" -C /usr/local/bin actionlint
+
+      # Presence is not the same claim as version: check.sh already fails on
+      # a skip whenever CI is set, so a missing tool goes red on its own and
+      # does not need a second, hand-written list here. A linter that
+      # disagrees between machines on the same construct is worse than no
+      # linter, which is what this actually guards.
+      - name: Tools are the pinned versions
+        run: |
+          shellcheck --version | grep -qx "version: 0.11.0" || {
+            echo "::error::unexpected shellcheck: $(shellcheck --version | tr '\n' ' ')"
+            exit 1
+          }
+          [ "$(shfmt --version)" = "v3.13.1" ] || {
+            echo "::error::unexpected shfmt: $(shfmt --version)"
+            exit 1
+          }
+          [ "$(actionlint --version | head -1)" = "1.7.12" ] || {
+            echo "::error::unexpected actionlint: $(actionlint --version | head -1)"
+            exit 1
+          }
+          [ "$(taplo --version)" = "taplo 0.10.0" ] || {
+            echo "::error::unexpected taplo: $(taplo --version)"
+            exit 1
+          }
+
+      # check.sh imports both. Deliberately unpinned, unlike everything
+      # above: these are transitive tooling for the checks rather than part
+      # of the declared environment, and a pinned pyyaml or jsonschema that
+      # goes stale would fail CI for a reason unrelated to anything this repo
+      # describes. From pip rather than apt -- the runner's Python is already
+      # there, and installing system packages is slower and less predictable
+      # than pip for two pure-Python libraries.
+      - name: Install the Python modules check.sh imports
+        run: python3 -m pip install --quiet pyyaml jsonschema
+
+      # zsh and python3 come from the runner image rather than a pinned
+      # download: check.sh's own zsh check already skips (or, under CI,
+      # fails) when zsh is absent, so there is nothing here to duplicate.
+      #
+      # CI is set by the runner, so strict mode needs no wiring and cannot be
+      # forgotten.
+      - run: ./check.sh
+
+  # This is the honest half of the split: whether a package id or a DSC
+  # resource name actually resolves is a claim only a machine with winget and
+  # the PowerShell Gallery can settle, and that machine is not this one.
+  windows-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate the WinGet configuration
+        run: winget configure validate .\windows\configuration.winget
+
+      # Same pyyaml check.sh and drift.sh already read this manifest with,
+      # and the same reasoning as the ubuntu job's unpinned install above:
+      # transitive tooling for a check, not part of the declared environment.
+      # Windows spells the interpreter `python`, not `python3`.
+      - name: Install the Python module used to parse the manifest
+        run: python -m pip install --quiet pyyaml
+
+      # The ids are parsed out of the manifest rather than kept as a literal
+      # list here, because a literal list is a second copy of the same set:
+      # the two drift silently, and a package added to configuration.winget
+      # would simply stop being covered, with nothing going red. Parsing it
+      # means this job covers whatever the manifest declares, forever,
+      # without anyone remembering to update a second place.
+      - name: Every declared package id resolves
+        shell: pwsh
+        run: |
+          $ids = python -c "import yaml; doc = yaml.safe_load(open('windows/configuration.winget', encoding='utf-8')); [print(r['settings']['id']) for r in doc['properties']['resources'] if r['resource'].endswith('/WinGetPackage')]"
+          $bad = @()
+          foreach ($id in $ids) {
+            winget show --id $id --exact | Out-Null
+            if ($LASTEXITCODE -ne 0) { $bad += $id }
+          }
+          if ($bad) { throw "unresolvable package ids: $($bad -join ', ')" }
+
+      # winget configure validate does NOT catch a bogus resource name inside
+      # a module that resolves -- tested directly with
+      # PSDscResources/ScriptBogus, which validated clean. validate catches
+      # malformed YAML and a fully unresolvable module namespace; it does not
+      # catch a wrong resource name inside a module that does resolve, which
+      # is precisely the error that survives every local check and then
+      # fails on a real machine mid-apply, in front of a UAC prompt.
+      # Find-DscResource queries the Gallery for what the module actually
+      # contains, which is the question validate cannot answer.
+      #
+      # Scoped to properties.resources, whose only non-WinGetPackage entry
+      # today is PSDscResources/Script (id: ubuntu) -- the exact case above.
+      # properties.assertions is a different list and out of scope here.
+      - name: Every declared DSC resource name exists in the gallery
+        shell: pwsh
+        run: |
+          $declared = python -c "import yaml; doc = yaml.safe_load(open('windows/configuration.winget', encoding='utf-8')); [print(r['resource']) for r in doc['properties']['resources'] if not r['resource'].endswith('/WinGetPackage')]"
+          $bad = @()
+          foreach ($r in $declared) {
+            $module, $name = $r -split '/', 2
+            if ($module -eq 'Microsoft.WinGet.DSC') { continue }  # ships with winget
+            $found = Find-DscResource -ModuleName $module -Name $name -ErrorAction SilentlyContinue
+            if (-not $found) { $bad += $r }
+          }
+          if ($bad) { throw "DSC resource not found in the gallery: $($bad -join ', ')" }
