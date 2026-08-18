@@ -7,7 +7,7 @@
 # `--no-verify` walks straight past it. It is here because it is strictly
 # better than nothing, not because it replaces the server.
 #
-# A force push is not detected by looking for a flag -- git does not tell the
+# A force push is not detected by looking for a flag — git does not tell the
 # hook which flags were used. It is detected by what a force push actually is:
 # a push whose remote tip is not an ancestor of what you are sending, meaning
 # commits that exist on the remote would stop existing.

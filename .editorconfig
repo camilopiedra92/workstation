@@ -5,7 +5,7 @@
 # what keeps the editor and the pre-commit hook from disagreeing.
 #
 # One exception, and it is worth knowing before you edit anything below. .toml
-# files are formatted by taplo, which does not read this file -- verified, not
+# files are formatted by taplo, which does not read this file — verified, not
 # assumed: with indent_size set to 8 here it still emits two spaces. Its
 # defaults happen to agree with the [*] section today, so nothing visibly
 # disagrees, but changing indent_size below would move the editor and leave
@@ -35,7 +35,7 @@ space_redirects = true
 # git hooks are shell too, but cannot carry a .sh extension: git executes them
 # by their exact name. This has to be a section of its own rather than joining
 # the one above, because an EditorConfig pattern containing a slash is matched
-# relative to this file -- folding them together would silently stop *.sh from
+# relative to this file — folding them together would silently stop *.sh from
 # covering claude/*.sh.
 [githooks/*]
 indent_style = space

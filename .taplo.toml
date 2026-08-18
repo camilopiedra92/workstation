@@ -1,5 +1,5 @@
 # Which schema validates which config, for both taplo's CLI and the editor
-# extension built on it -- one association, read by both, so the check and the
+# extension built on it — one association, read by both, so the check and the
 # autocomplete cannot disagree about what a valid key is.
 #
 # The schemas are vendored under schemas/ and referenced by path rather than by

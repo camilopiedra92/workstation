@@ -35,7 +35,10 @@ STRICT=0
 case "${1:-}" in
   "") ;;
   --strict) STRICT=1 ;;
-  *) echo "usage: $0 [--strict]" >&2; exit 2 ;;
+  *)
+    echo "usage: $0 [--strict]" >&2
+    exit 2
+    ;;
 esac
 
 GREEN=$'\033[32m'
@@ -48,7 +51,8 @@ FAILED=0
 SKIPPED=0
 
 check() { # check <name> <command...>
-  local name="$1"; shift
+  local name="$1"
+  shift
   local out
   if out=$("$@" 2>&1); then
     printf '%sPASS%s %s\n' "$GREEN" "$OFF" "$name"
@@ -77,7 +81,10 @@ have() { command -v "$1" > /dev/null 2>&1; }
 no_crlf() {
   local hits
   hits=$(git grep -lIP '\r' -- . || true)
-  [ -z "$hits" ] || { echo "files containing CR: $hits"; return 1; }
+  [ -z "$hits" ] || {
+    echo "files containing CR: $hits"
+    return 1
+  }
 }
 check "no carriage returns in tracked files" no_crlf
 
@@ -89,7 +96,10 @@ english_only() {
   local hits
   hits=$(git grep -nIP '[\x{00E1}\x{00E9}\x{00ED}\x{00F3}\x{00FA}\x{00F1}\x{00C1}\x{00C9}\x{00CD}\x{00D3}\x{00DA}\x{00D1}\x{00BF}\x{00A1}]' \
     -- . || true)
-  [ -z "$hits" ] || { echo "$hits"; return 1; }
+  [ -z "$hits" ] || {
+    echo "$hits"
+    return 1
+  }
 }
 check "english only" english_only
 
