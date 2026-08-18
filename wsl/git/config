@@ -85,12 +85,18 @@
 	# non-standard -- and doing that silently disables the default path.
 	#
 	# fsmonitor and untrackedCache are NOT set here, and their absence is a
-	# measurement and not an oversight. On macOS fsmonitor is backed by FSEvents,
-	# where the Mac repo measured it as the difference between seconds and
+	# pending measurement rather than an oversight. On macOS fsmonitor is backed
+	# by FSEvents, where the Mac repo measured the difference between seconds and
 	# milliseconds. Here it would be git's own daemon watching a virtualised ext4
-	# volume under WSL2, which is a different mechanism with a different cost.
-	# Step 3 of this task measures it on this machine. A setting that buys
-	# nothing is not neutral: it is a claim nobody checked.
+	# volume under WSL2 -- a different mechanism at a different cost, and nothing
+	# about the Mac's number transfers.
+	#
+	# The measurement is Task 11 Step 8 in
+	# docs/runbook-tasks-10-11-build-and-migrate.md, against a real migrated
+	# repository, because there is nothing worth timing before one exists. If it
+	# is meaningfully faster the settings land here with the numbers in this
+	# comment; if not, they stay out and the numbers go in the commit message.
+	# A setting that buys nothing is not neutral -- it is a claim nobody checked.
 
 [help]
 	# Fixes typos ("git stauts") after 1s instead of just suggesting
