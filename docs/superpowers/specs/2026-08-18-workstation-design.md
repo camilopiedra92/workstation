@@ -385,6 +385,29 @@ so does *"prove things rather than assert them"*. One section is added: the
 Windows/WSL boundary. Never write to `/mnt/c`. Never assume a Windows binary is
 on `PATH`. When something must cross, cross it explicitly and say so.
 
+## Line endings
+
+Found by measurement while creating this repo, not anticipated. Git for Windows
+ships `core.autocrlf=true` in its system gitconfig at
+`C:/Program Files/Git/etc/gitconfig`, so the first commit here emitted
+`LF will be replaced by CRLF the next time Git touches it`.
+
+This repo is authored on Windows and consumed on Linux, which is the exact
+direction that setting works against. `autocrlf` decides using a heuristic about
+what counts as text, and a shell script cannot rely on "usually right": a `.sh`
+reaching Ubuntu with CRLF fails at the shebang with
+`bad interpreter: /usr/bin/env bash^M`, an error that names neither the file nor
+the cause.
+
+`.gitattributes` declares `* text=auto eol=lf`, which takes the machine out of
+the answer entirely — the repo stores LF and checks out LF whatever any clone
+has `autocrlf` set to. `.ps1` is covered by that rule rather than exempted:
+both PowerShell 5.1 and 7 read LF scripts without complaint, and an exemption
+would be the one file able to reintroduce CRLF.
+
+This is practice #13 in a form the Mac repo never needed. There, every machine
+that touches the files is a Unix one, so the question never arises.
+
 ## Checks
 
 Carried unchanged: shellcheck, shfmt, bash syntax, zsh syntax, actionlint,
@@ -410,6 +433,9 @@ New, because the boundary is new:
 - `configuration.dsc.yaml` and `apt-packages.txt` do not declare the same thing
   twice. A package installed on both sides of the boundary is a boundary that
   has already leaked.
+- No tracked file contains a CR. `.gitattributes` should make this impossible,
+  which is exactly why it is asserted: a rule nobody has watched fail is a rule
+  nobody should rely on. Break it on purpose before trusting it.
 
 ## Bootstrap
 
