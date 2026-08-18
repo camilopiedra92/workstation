@@ -91,21 +91,65 @@ divergences Task 8 corrects, and it is the one with a bill attached.
 This is the step that matters most, and it cannot be checked any other way.
 
 The deny rules covering the Windows host's credentials exist only in this repo —
-the Mac has no host to protect against. They have never been exercised. Inside a
-Claude session:
+the Mac has no host to protect against. They have never been exercised.
+
+**Test against files that exist.** This matters more than it sounds: asking the
+agent to read a path that is not there produces "file not found", which looks
+like a refusal and proves nothing. Four of the ten denied categories exist on
+this machine, so those give a decisive answer.
+
+Inside a Claude session, one at a time:
 
 ```
-> read ~/.ssh/id_ed25519
+> read /mnt/c/Users/camilo.piedrahita/.claude/.credentials.json
+> read /mnt/c/Users/camilo.piedrahita/.docker/config.json
+> read /mnt/c/Users/camilo.piedrahita/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
+```
+
+**All three must be refused, and the refusal must name the permission rule** —
+not "file not found", not empty output. The first is the pointed one: it is the
+Windows installation's own Claude Code credentials, which the agent replacing it
+would otherwise be able to read.
+
+### Then prove the glob matches, not just the literal
+
+Every rule is written twice, once with the user name spelled out and once with a
+`*`. The three above exercise the literal. To exercise the pattern, create a file
+where none exists:
+
+```bash
+mkdir -p /mnt/c/Users/camilo.piedrahita/.aws
+echo "probe-not-a-real-credential" > /mnt/c/Users/camilo.piedrahita/.aws/credentials
+```
+
+```
 > read /mnt/c/Users/camilo.piedrahita/.aws/credentials
-> read /mnt/c/Users/camilo.piedrahita/AppData/Roaming/gh/hosts.yml
 ```
 
-**All three must be refused.**
+Must be refused. Then remove it:
 
-The first is the POSIX rule the Mac also has. The second and third are the ones
-this repo added, and they are the ones with no prior evidence. If either is
-allowed, the `/mnt/c` rules are not matching and Task 8 needs revisiting —
-report it rather than working around it.
+```bash
+rm -rf /mnt/c/Users/camilo.piedrahita/.aws
+```
+
+### And one negative control
+
+A test where everything is refused proves nothing either — the agent might be
+refusing all of `/mnt/c` for an unrelated reason, and the deny rules could be
+doing none of the work.
+
+```
+> read /mnt/c/Users/camilo.piedrahita/Development/workstation/README.md
+```
+
+**This one must succeed.** If it is also refused, the earlier refusals were not
+the deny rules and the test told you nothing.
+
+### If any of this comes out wrong
+
+Report it rather than working around it. A rule that does not fire is worse than
+no rule: it reads as protection while providing none, and this is the only moment
+anyone will ever check.
 
 Note that `install.sh` disables Windows **PATH interop**, which is a different
 thing from the mount. `/mnt/c` remains fully readable. That is precisely why
