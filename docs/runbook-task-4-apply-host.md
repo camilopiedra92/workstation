@@ -109,34 +109,73 @@ exit
 
 ## Step 4 — Measure the filesystem claim
 
-This is the number the entire "repos live on ext4" decision rests on, and so far
-it is a number from other people's benchmarks rather than from your machine.
-It takes about a minute.
+This is the number the entire "repos live on ext4" decision rests on, and
+otherwise it is a number from other people's benchmarks rather than from this
+machine.
 
-```powershell
-wsl -d Ubuntu-26.04 -- bash -c 'echo "--- ext4 (home) ---"; cd ~ && time (mkdir -p bench && cd bench && for i in $(seq 1 2000); do echo x > f$i; done; cd ~ && rm -rf ~/bench); echo "--- /mnt/c ---"; cd /mnt/c/Users/camilo.piedrahita && time (mkdir -p bench && cd bench && for i in $(seq 1 2000); do echo x > f$i; done; cd /mnt/c/Users/camilo.piedrahita && rm -rf bench)'
+**Do not try to pass this as a one-liner.** It crosses three shells — PowerShell,
+`wsl.exe`, and bash — and each one re-interprets the quoting. Attempting it
+inline produced `syntax error near unexpected token '('` twice on the first run
+of this runbook. Write a file and run the file:
+
+Inside Ubuntu (`wsl -d Ubuntu-26.04`):
+
+```bash
+cat > ~/bench.sh <<'EOF'
+echo "--- ext4 (home) ---"
+cd ~; rm -rf bench; mkdir bench; cd bench
+time ( for i in $(seq 1 2000); do echo x > f$i; done )
+cd ~; rm -rf bench
+echo "--- /mnt/c ---"
+cd /mnt/c/Users/camilo.piedrahita; rm -rf bench; mkdir bench; cd bench
+time ( for i in $(seq 1 2000); do echo x > f$i; done )
+cd ..; rm -rf bench
+EOF
+bash ~/bench.sh
+rm ~/bench.sh
 ```
 
-**Send me both numbers.** They go into the commit message and the README, so the
-claim in this repo is measured on this laptop rather than borrowed.
-
-If ext4 is not dramatically faster, that is a finding worth stopping for — it
-would mean something is wrong with the WSL2 setup, not that the design is wrong.
+**Measured on this machine, 2026-08-18:** ext4 `0.065s`, `/mnt/c` `7.554s` — a
+factor of **116**, against the 9–20x the public benchmarks report. If a rebuild
+produces a number in the same order of magnitude, the setup is right. If ext4 is
+not dramatically faster, that is a finding worth stopping for — it means
+something is wrong with the WSL2 setup, not that the design is wrong.
 
 ---
 
 ## Step 5 — Deploy the terminal settings
 
-Back in **Git Bash**:
+**Stay in PowerShell** — the earlier steps are PowerShell and switching shells
+mid-runbook is what broke this step the first time. A backslash line-continuation
+is bash syntax, not PowerShell, so a two-line `cp` silently copies nothing and
+prints the destination path as though it had worked.
 
-```bash
-cd /c/Users/camilo.piedrahita/Development/workstation
-cp windows/terminal/settings.json \
-  "/c/Users/camilo.piedrahita/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
+Keep the stock file first. Windows Terminal rewrites `settings.json` on its own,
+so this is the only copy of the default you will get:
+
+```powershell
+$wt = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
+Copy-Item "$wt\settings.json" "$wt\settings.json.stock-backup"
+Copy-Item .\windows\terminal\settings.json "$wt\settings.json" -Force
 ```
 
-If that path does not exist, Windows Terminal has not been launched since it was
-installed. Open it once, close it, and try again.
+Then confirm it actually landed, rather than assuming:
+
+```powershell
+Select-String -Path "$wt\settings.json" -Pattern "JetBrainsMono Nerd Font" | Measure-Object | Select-Object Count
+```
+
+Expected: `1` or more. **`0` means the copy did not happen** — that is exactly the
+failure this check exists to catch, and it is invisible otherwise.
+
+If the `LocalState` directory does not exist, Windows Terminal has not been
+launched since it was installed. Open it once, close it, try again.
+
+**A note on what happens next.** Open Windows Terminal and it will rewrite this
+file — resolving `"defaultProfile": "Ubuntu-26.04"` into the GUID it generates for
+that distro. That is expected and it confirms the name-based approach works.
+It also means this file can never be symlinked into the repo: Terminal owns it at
+runtime, the same way Claude Code owns its own `settings.json`.
 
 ---
 
