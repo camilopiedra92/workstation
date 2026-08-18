@@ -1,0 +1,44 @@
+{
+  // VS Code, host side. This file holds what the local UI renders; anything
+  // that needs the toolchain lives in wsl/vscode/settings.json and is applied
+  // to the Remote-WSL machine scope. A setting on the wrong side of that line
+  // silently does nothing, which is the failure mode this split prevents.
+
+  // ---------- Font ----------
+  // The same font and features as windows/terminal/settings.json, so a prompt
+  // looks identical in either terminal. Left unset, VS Code falls back to
+  // Consolas, and what breaks under it is `eza --icons`, which the ls/ll/la/lt
+  // aliases all pass: its icons are Private Use Area codepoints only a Nerd Font
+  // carries, so every line of a listing starts with an empty box. The starship
+  // prompt survives -- it is built from standard Unicode arrows.
+  "editor.fontFamily": "JetBrainsMono Nerd Font, Consolas, monospace",
+  "editor.fontLigatures": "'calt', 'zero', 'ss02'",
+  // Stated separately even though the terminal would inherit the line above:
+  // this is the one that has to be a Nerd Font, and an inherited value is the
+  // kind that gets broken by an unrelated edit.
+  "terminal.integrated.fontFamily": "JetBrainsMono Nerd Font",
+
+  // ---------- Appearance ----------
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.startupEditor": "none",
+  "workbench.editor.empty.hint": "hidden",
+
+  // ---------- Terminal ----------
+  // The default profile is WSL, not PowerShell. Nothing on this machine is
+  // developed against Windows, so a PowerShell prompt opening by default is an
+  // invitation to work in the wrong place.
+  "terminal.integrated.defaultProfile.windows": "Ubuntu-26.04",
+
+  // ---------- Remote ----------
+  // Extensions that must be installed inside WSL rather than on the host. VS
+  // Code otherwise installs them locally, where they cannot see the toolchain.
+  "remote.WSL.fileWatcher.polling": false,
+
+  // ---------- Noise ----------
+  "telemetry.telemetryLevel": "off",
+  // Red Hat extensions ship their own telemetry on a separate switch that
+  // telemetry.telemetryLevel does not reach. Set here so it is already off if
+  // one is ever installed.
+  "redhat.telemetry.enabled": false,
+  "update.showReleaseNotes": false
+}

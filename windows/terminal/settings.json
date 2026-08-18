@@ -1,0 +1,149 @@
+{
+  "$schema": "https://aka.ms/terminal-profiles-schema",
+
+  // Windows Terminal, translated from the Mac's ghostty/config.
+  //
+  // What did not port, recorded rather than omitted:
+  //   font-thicken            a macOS antialiasing correction; the problem it
+  //                           solves does not exist on Windows' rasteriser
+  //   window-colorspace=p3    no counterpart
+  //   background-blur=macos-glass  the nearest thing is useAcrylic, which is a
+  //                           different material, not the same one renamed
+  //   window-padding-color=extend  no counterpart
+  //   minimum-contrast        no counterpart
+  //
+  // Every other key below was confirmed against schemas/windows-terminal.json
+  // before being written. check.sh re-confirms it on every run.
+  //
+  // defaultProfile names the profile rather than a GUID, and profiles.list
+  // carries no WSL entry: Windows Terminal generates the WSL profile itself
+  // (its dynamic profile generator is Windows.Terminal.Wsl) and derives that
+  // profile's GUID from the distro name. A hand-written GUID here would point
+  // at nothing, or worse, create a second, duplicate profile beside the real
+  // one, with these appearance settings applied to the decoy while the
+  // profile actually used stays default. Every appearance setting therefore
+  // lives in profiles.defaults instead, which dynamically generated profiles
+  // pick up without needing a GUID.
+
+  "defaultProfile": "Ubuntu-26.04",
+  "copyOnSelect": true,
+  "copyFormatting": "none",
+
+  "profiles": {
+    "defaults": {
+      "font": {
+        // The same font as the Mac, and as VS Code below. check.sh asserts all
+        // three agree and that exactly one Nerd Font is declared installed.
+        "face": "JetBrainsMono Nerd Font",
+        "size": 14,
+        // JetBrains Mono ships no `liga`; its ligatures live in `calt`.
+        // `zero` slashes the zero -- the single highest-value feature in a
+        // terminal, where 0 and O collide constantly in paths and hashes.
+        // `ss02` is the font's "Closed construction": narrower apertures on
+        // a/c/e/s. A letterform preference, unrelated to ligatures.
+        "features": { "calt": 1, "zero": 1, "ss02": 1 },
+        // Ghostty: adjust-cell-height = 12%, a 12% increase over the natural
+        // computed cell height. cellHeight here is not the same kind of
+        // setting -- it is an absolute override, not an adjustment, and
+        // Microsoft's own schema description says the unset default "is
+        // usually quite close to setting this to 1.2". Composing the two --
+        // 1.2 natural times Ghostty's 1.12 adjustment -- gives 134%, written
+        // below. Confirmed present in schemas/windows-terminal.json
+        // (font.cellHeight, a CSSLengthPercentage) before being written.
+        "cellHeight": "134%"
+      },
+      // Catppuccin Mocha, the same theme as the Mac's Ghostty.
+      "colorScheme": "Catppuccin Mocha",
+      // Ghostty: window-padding-x = 18, window-padding-y = 14.
+      // Order here is left, top, right, bottom.
+      "padding": "18, 14, 18, 14",
+      // Ghostty: background-opacity = 0.90. This scale is 0-100.
+      // Unblurred opacity requires Windows 11, which this machine is.
+      "opacity": 90,
+      "useAcrylic": true,
+      "cursorShape": "filledBox",
+      // Ghostty: scrollback-limit = 100000000 bytes. This is a line count, so
+      // it is not the same number expressed differently -- it is a different
+      // unit, chosen to be generous rather than converted.
+      "historySize": 100000,
+      // Ghostty: unfocused-split-opacity = 0.6. Windows Terminal applies this
+      // per window rather than per split, which is the closest thing it has.
+      "unfocusedAppearance": { "opacity": 70 },
+      // startingDirectory lives in defaults rather than on the Ubuntu profile,
+      // and that is the only way to set it without a GUID: Windows Terminal
+      // generates the WSL profile and derives its GUID from the distro name, so
+      // there is no stable id to attach a per-profile setting to.
+      //
+      // Leaving it unset was not an option. The documented default is
+      // %USERPROFILE%, which from inside Ubuntu is /mnt/c/Users/... -- the path
+      // this entire design exists to keep work off, at 9-20x the cost on build
+      // artifacts. Unset would not make that a mistake someone occasionally
+      // makes; it would make it the default, in every new tab.
+      //
+      // Windows PowerShell overrides it back below. Its GUID is a fixed
+      // built-in constant, not a generated one, so it can be named safely.
+      //
+      // This hardcodes the UNIX username `camilo`, created at Ubuntu's first
+      // launch (Task 4 Step 4). If a different name is ever chosen, this line
+      // is wrong and the terminal opens somewhere that does not exist.
+      "startingDirectory": "\\\\wsl$\\Ubuntu-26.04\\home\\camilo"
+    },
+    "list": [
+      {
+        "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+        "name": "Windows PowerShell",
+        "hidden": false,
+        // Overrides profiles.defaults.startingDirectory back to the Windows
+        // home: this is the one profile here meant to open on the Windows
+        // side. Its GUID is a fixed built-in constant, not a generated one,
+        // so it can be named safely.
+        "startingDirectory": "%USERPROFILE%"
+      },
+      { "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}", "name": "Command Prompt", "hidden": true }
+    ]
+  },
+
+  "schemes": [
+    {
+      "name": "Catppuccin Mocha",
+
+      "cursorColor": "#F5E0DC",
+      "selectionBackground": "#585B70",
+
+      "background": "#1E1E2E",
+      "foreground": "#CDD6F4",
+
+      "black": "#45475A",
+      "red": "#F38BA8",
+      "green": "#A6E3A1",
+      "yellow": "#F9E2AF",
+      "blue": "#89B4FA",
+      "purple": "#F5C2E7",
+      "cyan": "#94E2D5",
+      "white": "#BAC2DE",
+
+      "brightBlack": "#585B70",
+      "brightRed": "#F38BA8",
+      "brightGreen": "#A6E3A1",
+      "brightYellow": "#F9E2AF",
+      "brightBlue": "#89B4FA",
+      "brightPurple": "#F5C2E7",
+      "brightCyan": "#94E2D5",
+      "brightWhite": "#A6ADC8"
+    }
+  ],
+
+  // Shift+Enter inserts a line break instead of sending the message.
+  // Essential for multi-line prompts in Claude Code, and the single
+  // keybinding whose absence is noticed within a minute.
+  //
+  // The brief's draft put "keys" directly on the actions entry; the vendored
+  // schema (schemas/windows-terminal.json) does not allow that -- an actions
+  // item is a FullCommand, and "keys" is not one of its properties. The
+  // schema splits an action from the key that triggers it: actions defines
+  // the command under a stable id, keybindings binds a key chord to that id.
+  "actions": [
+    { "id": "User.sendInputNewline", "command": { "action": "sendInput", "input": "\n" } }
+  ],
+  "keybindings": [{ "id": "User.sendInputNewline", "keys": "shift+enter" }]
+}
