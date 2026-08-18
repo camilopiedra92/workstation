@@ -61,20 +61,22 @@ else will remind you.
 cat ~/.config/git/config.local
 ```
 
-It says `CHANGE ME` and `change@me.invalid`. Replace them:
+It says `CHANGE ME` and `change@me.invalid`. Replace them with your own:
 
 ```bash
-cat > ~/.config/git/config.local <<'EOF'
-[user]
-	name = CHANGE ME
-	email = 142334282+camilopiedra92@users.noreply.github.com
-EOF
+git config --file ~/.config/git/config.local user.name  "<your name>"
+git config --file ~/.config/git/config.local user.email "<your address>"
 ```
 
-That address is the GitHub noreply form, which is what your `dotfiles` repo
-already commits with — it keeps your real address off public repositories. Use
-your real one instead if you would rather; this file is outside the repo and each
-machine carries its own.
+**For the address, use your GitHub noreply form** — that is what your `dotfiles`
+repo already commits with, and it keeps your real address off public
+repositories. GitHub shows it under Settings → Emails, as
+`<id>+<username>@users.noreply.github.com`.
+
+This file lives outside the repo precisely so each machine can carry its own
+values and the repository can stay public. That is also why this page does not
+print them: a check refuses to let any identity into a tracked file, and it
+refused this runbook when it did.
 
 Then confirm git actually sees it:
 
