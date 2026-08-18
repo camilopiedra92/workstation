@@ -496,6 +496,32 @@ no_mnt_c() {
 }
 check "no file assumes /mnt/c" no_mnt_c
 
+# --- Git ---------------------------------------------------------------------
+check "gitconfig parses" git config --file wsl/git/config --list
+
+# Identity must never be in the repo. This is the check that lets the repo be
+# public: config.local is included by relative path and lives outside git.
+no_identity_in_repo() {
+  local hits
+  hits=$(grep -nE '^\s*(name|email)\s*=' wsl/git/config || true)
+  [ -z "$hits" ] || {
+    echo "identity in the repo: $hits"
+    return 1
+  }
+}
+check "git identity is not in the repo" no_identity_in_repo
+
+# The Mac's ignore file is macOS-specific and this one must not inherit it.
+no_macos_in_ignore() {
+  local hits
+  hits=$(grep -nE 'DS_Store|AppleDouble|Spotlight-V100|__MACOSX' wsl/git/ignore || true)
+  [ -z "$hits" ] || {
+    echo "macOS entries in a Linux ignore file: $hits"
+    return 1
+  }
+}
+check "git/ignore carries no macOS entries" no_macos_in_ignore
+
 # --- Summary -----------------------------------------------------------------
 echo
 if [ "$FAILED" -ne 0 ]; then

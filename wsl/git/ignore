@@ -1,0 +1,55 @@
+# Linux
+.directory
+.Trash-*
+.nfs*
+.fuse_hidden*
+
+# Windows.
+#
+# No Windows process works in these repos -- they live on ext4 inside WSL and
+# nothing on the host touches them. This block is here for the one path that
+# still exists: browsing \\wsl$ in File Explorer, which writes these files into
+# whatever directory it renders.
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Editors
+#
+# Ignoring the contents and un-ignoring the four shared files, which is what
+# github/gitignore does and what a blanket `.vscode/` gets wrong. Those files
+# are project configuration meant to be committed -- extensions.json is how a
+# repo tells a new contributor which extensions it expects -- and a global
+# ignore of the whole directory makes `git add .vscode/extensions.json` do
+# nothing at all, with no error to explain why.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# JetBrains keeps per-user state inside a directory that also holds shared
+# project settings, so the same rule applies.
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+
+*.swp
+*.swo
+*~
+
+# Environments and secrets (safety net, not a replacement for the project's .gitignore)
+.env
+.env.local
+.venv/
+
+# Tools
+# Per-machine permissions Claude Code approves as you work. Machine state, not
+# project state, so it must never reach a shared branch.
+**/.claude/settings.local.json
