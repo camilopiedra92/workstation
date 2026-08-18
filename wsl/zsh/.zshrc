@@ -1,13 +1,17 @@
 # ═══════════════════════════════════════════════════════════
-#  .zshrc  —  managed in ~/dotfiles
+#  .zshrc  —  managed in ~/workstation
 #  Plugins: antidote with static loading (see .zsh_plugins.txt)
 # ═══════════════════════════════════════════════════════════
 
 # ---------- PATH ----------
-# There is none here on purpose. PATH is built in .zshenv and re-asserted in
-# .zprofile after macOS runs path_helper; setting any of it here would mean a
-# directory that exists only where a terminal is attached, which is the bug
-# those two files exist to close.
+# There is none here on purpose. PATH is built in .zshenv, which every zsh reads
+# -- including the non-interactive ones a git hook or `zsh -c` spawns. Setting
+# any of it here would produce a directory that exists only where a terminal is
+# attached, which is the bug .zshenv exists to prevent.
+#
+# The Mac's version of this comment also mentioned .zprofile re-asserting PATH
+# after macOS runs path_helper. There is no .zprofile here and no path_helper to
+# undo -- check.sh asserts the file stays absent.
 
 # ---------- History ----------
 # The most useful thing and the one almost nobody configures: by default zsh
@@ -69,7 +73,7 @@ eval "$(mise activate zsh)"
 eval "$(starship init zsh)"
 
 # ---------- Smart navigation ----------
-# zoxide learns from your cd's: "cd dotfiles" jumps there from anywhere.
+# zoxide learns from your cd's: "cd workstation" jumps there from anywhere.
 #
 # --cmd cd is zoxide's own way of taking over cd, and replaces `alias cd='z'`.
 # The alias left `cd` completing as the builtin, so tab offered subdirectories
