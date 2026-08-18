@@ -470,6 +470,57 @@ no_manager_overlap() {
 }
 check "apt and mise do not claim the same package" no_manager_overlap
 
+# The linter versions are declared in three places: the WSL manifest, the Windows
+# host manifest and the CI workflow. They must agree, or the same file gets three
+# verdicts depending on where it was checked -- which is the one thing this repo's
+# whole check discipline rests on not happening.
+#
+# Asserted rather than trusted to bump-tools.sh, because a hand edit never goes
+# near the bumper, and because the bumper itself missed these for a while.
+linter_versions_agree() {
+  python3 - << 'PY'
+import re, sys
+
+def mise(tool):
+    for line in open('wsl/mise/config.toml', encoding='utf-8'):
+        m = re.match(r'^%s = "([^"]+)"' % tool, line)
+        if m:
+            return m.group(1)
+
+def winget(pkg):
+    s = open('windows/configuration.winget', encoding='utf-8').read()
+    m = re.search(r'id:\s*%s\s*\n\s*source:\s*winget\s*\n\s*version:\s*"?([^"\s]+)"?' % re.escape(pkg), s)
+    if not m:
+        m = re.search(r'version:\s*"?([^"\s]+)"?\s*\n\s*id:\s*%s' % re.escape(pkg), s)
+    return m.group(1) if m else None
+
+def ci(var):
+    for line in open('.github/workflows/ci.yml', encoding='utf-8'):
+        m = re.match(r'\s*%s:\s*v?([0-9.]+)' % var, line)
+        if m:
+            return m.group(1)
+
+problems = []
+for tool, pkg, var in (('shellcheck', 'koalaman.shellcheck', 'SHELLCHECK_VERSION'),
+                       ('shfmt', 'mvdan.shfmt', 'SHFMT_VERSION'),
+                       ('taplo', 'tamasfe.taplo', 'TAPLO_VERSION')):
+    got = {'mise': mise(tool), 'winget': winget(pkg), 'ci': ci(var)}
+    if None in got.values():
+        problems.append('%s: could not read a version from every file: %s' % (tool, got))
+    elif len(set(got.values())) != 1:
+        problems.append('%s disagrees across files: %s' % (tool, got))
+
+for p in problems:
+    print(p)
+sys.exit(1 if problems else 0)
+PY
+}
+if have python3; then
+  check "the linter versions agree across all three manifests" linter_versions_agree
+else
+  skip "the linter versions agree across all three manifests" "python3 not installed"
+fi
+
 # --- zsh and the prompt -------------------------------------------------------
 syntax_zsh() {
   have zsh || return 0
