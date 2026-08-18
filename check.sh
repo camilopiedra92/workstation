@@ -479,29 +479,26 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 # invisible to this check, including for a real assumption written into it
 # later.
 #
-# wsl/claude/CLAUDE.md is excluded like docs/**, for the same reason: its
-# "Windows boundary" section is prose stating this exact rule, not code
-# assuming it. Filtering by "# or //" would not reach it -- Markdown prose
-# starts with neither -- so it is excluded by path instead, the same
-# exception already made for docs/**.
-#
-# A `Read(/mnt/c...)` line is filtered too, but narrowly: it is a deny-list
-# entry whose entire purpose is refusing that path, the opposite of assuming
-# it is workable. The filter is scoped to `Read(`, not the whole file, so a
-# real assumption elsewhere in settings.json -- an additionalDirectories
-# entry pointed at /mnt/c, say -- still fails this check.
-#
 # The pattern deliberately omits the leading slash. Git for Windows rewrites
 # an argument that looks like an absolute Unix path into a Windows path
 # before git.exe sees it, so '/mnt/c' matches nothing here -- the check
 # passed on every run while inspecting nothing, until a deliberate probe
 # caught it. 'mnt/c' matches the same lines and is not rewritten, on either
 # platform.
+#
+# Three exclusions, three different reasons:
+#   ':!*.md'          markdown is prose. This check guards config and code,
+#                     where an assumption is executed rather than described.
+#   ':!check.sh'      this file necessarily contains the pattern it searches for.
+#   '"Read(/mnt/c'    a deny rule REFUSES the path rather than assuming it. Kept
+#                     to that exact string so a permissive entry -- an
+#                     additionalDirectories pointing at /mnt/c, say -- still
+#                     fires in the same file.
 no_mnt_c() {
   local hits
-  hits=$(git grep -nI 'mnt/c' -- . ':!docs/**' ':!check.sh' ':!wsl/claude/CLAUDE.md' |
+  hits=$(git grep -nI 'mnt/c' -- . ':!*.md' ':!check.sh' |
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' |
-    grep -vE 'Read\(/mnt/c' || true)
+    grep -vE '"Read\(/mnt/c' || true)
   [ -z "$hits" ] || {
     echo "$hits"
     return 1
