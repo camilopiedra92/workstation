@@ -257,6 +257,14 @@ fi
 # Same argument as the font-coherence and startingDirectory checks below and
 # above: two places naming the same thing agree because something makes them,
 # not because whoever edits one remembers the other.
+#
+# Flagging an action with no keybinding is a rule about this file today, not
+# a general one: every action here exists to be bound to a key, so an unbound
+# one is a mistake. That stops being true the day an action is meant to be
+# invoked only from the command palette and deliberately carries no
+# keybinding -- whoever adds one should treat this check failing as a sign to
+# widen it (e.g. an explicit allow-list of intentionally unbound ids), not as
+# a rule to silence.
 actions_and_keybindings_resolve() {
   python3 - << 'PY'
 import json, re, sys
