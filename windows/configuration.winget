@@ -4,14 +4,23 @@
 # Brewfile and it is not a compromise: WinGet Configuration is declarative,
 # idempotent, official, and applied with one command.
 #
-# It declares five kinds of thing and nothing else. Four make the WSL layer
-# reachable, visible or typeable: the subsystem, a terminal, a font, an editor.
-# The fifth is the tools needed to author this repo -- shellcheck, shfmt and
-# taplo -- which are a different job from running the environment, and are kept
-# in their own group so the first list cannot quietly absorb them.
+# It serves two jobs and nothing else.
+#
+# The first is making the WSL layer reachable, visible and typeable: the
+# subsystem itself, a terminal, a font, an editor, and PowerToys for the
+# keyboard remapping that carries Mac habits across.
+#
+# The second is authoring this repository: shellcheck, shfmt and taplo. That is
+# a different job from running the environment, and they are kept in their own
+# group so the first list cannot quietly absorb them.
 #
 # The moment something belongs to neither job, that is the signal the boundary
 # is being crossed for a bad reason. check.sh holds both lists.
+#
+# Stated as two jobs rather than as a count on purpose. An earlier version of
+# this paragraph said "five kinds of thing" and named four of them; the count
+# went stale the moment the groups changed, twice, and both times it was found by
+# a reader rather than by a check. A rule survives an edit that a tally does not.
 #
 # Naming: Microsoft's convention is ./.config/configuration.winget. The
 # extension is kept, because that is what carries the schema association. The
