@@ -514,9 +514,27 @@ check "gitconfig parses" git config --file wsl/git/config --list
 
 # Identity must never be in the repo. This is the check that lets the repo be
 # public: config.local is included by relative path and lives outside git.
+#
+# Grepped across the whole tree, not just wsl/git/config: that file was never
+# the only door into the repo, and it was the only one guarded. install.sh's
+# own git-identity heredoc walked straight past a check that grepped one file
+# and reported PASS. *.md is excluded because prose describing the pattern
+# (this comment included) is not the pattern; check.sh excludes itself for the
+# same reason -- its own check function has to spell out what it is looking
+# for.
+#
+# install.sh still writes lines shaped exactly like `name = ...` and
+# `email = ...` -- that heredoc is the git-config skeleton config.local is
+# supposed to look like, placeholders and all, and a check that flagged its
+# own placeholders would fail forever, on every commit, for a file that is
+# correct. The two values excluded below are wsl/install.sh's placeholders,
+# verbatim; only those two exact values are let through, so a real name or
+# address dropped into that same heredoc -- or anywhere else -- still fails.
+# The two files have to agree and only these comments say so.
 no_identity_in_repo() {
   local hits
-  hits=$(grep -nE '^\s*(name|email)\s*=' wsl/git/config || true)
+  hits=$(git grep -nE '^[[:space:]]*(name|email)[[:space:]]*=' -- . ':!*.md' ':!check.sh' |
+    grep -vE '=[[:space:]]*(CHANGE ME|change@me\.invalid)[[:space:]]*$' || true)
   [ -z "$hits" ] || {
     echo "identity in the repo: $hits"
     return 1
@@ -662,15 +680,23 @@ check "subagent rows are valid jsonl with the agent name" subagent_rows
 
 # --- install.sh is idempotent -------------------------------------------------
 # Adapted from the Mac's install_is_idempotent, with every path pointed at
-# wsl/install.sh instead. Runs the script against a temporary HOME, then runs
-# it again, and asserts the second run backs up nothing -- the signal that
-# link() found every destination already correct.
+# wsl/install.sh instead -- and run with --links-only, not the bare script.
 #
-# apt-get, mise and a real network are not simulated -- there is no dry-run
-# flag -- so this needs an actual Ubuntu with sudo, which this repo's own
-# commit machine is not. Where it is not available, this check is deferred:
-# see docs/runbook-tasks-10-11-build-and-migrate.md, which is where a human
-# first sees it run to completion.
+# The full script installs apt packages, downloads pinned runtimes with mise,
+# fetches Python CLIs with uv, clones antidote, edits /etc/wsl.conf and can
+# change the login shell. None of that belongs in a check githooks/pre-commit
+# runs on every commit, and a temporary HOME does not sandbox any of it --
+# sudo does not care about $HOME, and apt and mise write outside it too.
+# --links-only exists in wsl/install.sh for exactly this: it runs only the
+# steps that do respect $HOME, the symlinks and the git identity file, so this
+# check can call the real script instead of a paraphrase of it.
+#
+# What this asserts, precisely, because it is easy to overclaim: the second
+# run backs up nothing, which is the signal that link() found every
+# destination already correct. Idempotency of apt, mise, uv and antidote is
+# NOT exercised here -- those steps never run under --links-only -- and stays
+# deferred to a real run: see docs/runbook-tasks-10-11-build-and-migrate.md,
+# which is where a human first sees the full script run twice.
 install_is_idempotent() {
   local tmphome first second status=0
   tmphome=$(mktemp -d)
@@ -679,7 +705,7 @@ install_is_idempotent() {
     XDG_CONFIG_HOME="$tmphome/.config" \
     XDG_DATA_HOME="$tmphome/.local/share" \
     XDG_STATE_HOME="$tmphome/.local/state" \
-    ./wsl/install.sh 2>&1) || {
+    ./wsl/install.sh --links-only 2>&1) || {
     echo "first run failed:"
     echo "$first"
     rm -rf "$tmphome"
@@ -690,7 +716,7 @@ install_is_idempotent() {
     XDG_CONFIG_HOME="$tmphome/.config" \
     XDG_DATA_HOME="$tmphome/.local/share" \
     XDG_STATE_HOME="$tmphome/.local/state" \
-    ./wsl/install.sh 2>&1) || {
+    ./wsl/install.sh --links-only 2>&1) || {
     echo "second run failed:"
     echo "$second"
     rm -rf "$tmphome"
@@ -707,9 +733,9 @@ install_is_idempotent() {
   return "$status"
 }
 if have apt-get && have sudo; then
-  check "install.sh is idempotent" install_is_idempotent
+  check "install.sh --links-only is idempotent" install_is_idempotent
 else
-  skip "install.sh is idempotent" "needs apt-get and sudo (a real Ubuntu host)"
+  skip "install.sh --links-only is idempotent" "needs apt-get and sudo (a real Ubuntu host)"
 fi
 
 # --- Summary -----------------------------------------------------------------
