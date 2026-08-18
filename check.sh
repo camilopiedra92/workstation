@@ -472,25 +472,23 @@ no_zprofile() {
 }
 check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofile
 
-# Nothing in the repo may assume /mnt/c is a working path.
+# Nothing in the repo may assume /mnt/c is a working path. A comment that
+# explains why it is kept off PATH is not an assumption -- it is the rule
+# being documented -- so comment lines are filtered out rather than whole
+# files excluded; excluding a file by name would make it permanently
+# invisible to this check, including for a real assumption written into it
+# later.
 #
-# check.sh, wsl/zsh/.zshenv, wsl/zsh/.zshrc and windows/terminal/settings.json
-# are excluded for the same reason: each of them mentions /mnt/c only to
-# explain why it is deliberately kept off PATH or unset, and that explanation
-# is the point of those files, not a violation of this rule.
-#
-# MSYS2_ARG_CONV_EXCL matters on this platform specifically: Git for Windows
-# rewrites a leading-slash argument like '/mnt/c' into a Windows path before
-# git.exe ever sees it, so without this the pattern silently matches nothing
-# and the check passes no matter what the files say. Confirmed by hand: with
-# the mangling in effect this check found zero hits against files that
-# plainly contained the string. git on Linux CI does not do this rewrite, so
-# the variable is a no-op there.
+# The pattern deliberately omits the leading slash. Git for Windows rewrites
+# an argument that looks like an absolute Unix path into a Windows path
+# before git.exe sees it, so '/mnt/c' matches nothing here -- the check
+# passed on every run while inspecting nothing, until a deliberate probe
+# caught it. 'mnt/c' matches the same lines and is not rewritten, on either
+# platform.
 no_mnt_c() {
   local hits
-  hits=$(MSYS2_ARG_CONV_EXCL='/mnt/c' git grep -nI '/mnt/c' -- . ':!docs/**' \
-    ':!check.sh' ':!wsl/zsh/.zshenv' ':!wsl/zsh/.zshrc' \
-    ':!windows/terminal/settings.json' || true)
+  hits=$(git grep -nI 'mnt/c' -- . ':!docs/**' ':!check.sh' |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' || true)
   [ -z "$hits" ] || {
     echo "$hits"
     return 1
