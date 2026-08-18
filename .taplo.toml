@@ -9,8 +9,12 @@
 # reasoning as the pinned tool hashes in .github/tool-checksums.txt.
 #
 # The cost is that a vendored schema goes stale, and stale here means a key
-# upstream has added is reported as invalid. drift.sh is what notices: it
-# already asks the network the questions this file cannot.
+# upstream has added is reported as invalid -- the config right, the check
+# wrong, and the message saying the opposite. Nothing detects that: no script
+# in this repo compares these copies against what upstream publishes, because
+# doing so would need the network from a gate that must not. Re-vendoring is a
+# manual act, done when a key you want is refused. Said plainly rather than
+# left implied, so nobody counts this as monitored.
 
 # The one formatter option written down, and it is not here because it is the
 # default -- it happens to be, and restating a default normally buys nothing

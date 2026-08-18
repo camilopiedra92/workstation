@@ -1,8 +1,14 @@
 # One definition of formatting, read by everything that touches these files:
 # shfmt (which parses .editorconfig natively when no flags override it), VS Code
-# through the EditorConfig extension already in the Brewfile, and any editor
-# anyone else opens the repo with. Encoding it here rather than in tool flags is
-# what keeps the editor and the pre-commit hook from disagreeing.
+# through the EditorConfig extension, and any editor anyone else opens the repo
+# with. Encoding it here rather than in tool flags is what keeps the editor and
+# the pre-commit hook from disagreeing.
+#
+# That extension is not declared anywhere in this repo. Nothing here declares
+# any VS Code extension: the Mac repo's Brewfile carries its list, and this repo
+# has no equivalent manifest yet. So the editor half of the sentence above holds
+# only on a machine where somebody installed it by hand. shfmt and the hook are
+# unaffected -- they read this file directly.
 #
 # One exception, and it is worth knowing before you edit anything below. .toml
 # files are formatted by taplo, which does not read this file — verified, not

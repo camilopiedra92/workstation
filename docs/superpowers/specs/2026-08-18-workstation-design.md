@@ -580,4 +580,4 @@ Written down so they are not discovered by accident.
 | When gcloud arrives | Add the second Python back, with the gsutil reasoning next to it. |
 | When Ghostty ships Windows | Re-evaluate the terminal. Not on its roadmap today. |
 | 2031 | Ubuntu 26.04 leaves support. |
-| No expiry | The font pin moves when a glyph problem makes it move. The vendored schemas move when a key this repo wants appears upstream, or when `drift.sh` reports a divergence that matters. |
+| No expiry | The font pin moves when a glyph problem makes it move. The vendored schemas move when a key this repo wants is refused — nothing watches them, which the README records as an accepted gap. |

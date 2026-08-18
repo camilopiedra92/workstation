@@ -23,8 +23,8 @@ thing to rot.
 ## New machine
 
 ```powershell
-# 1. PowerShell on Windows, once. Raises UAC:
-winget configure .\windows\configuration.winget
+# 1. PowerShell on Windows, from the repo root, once. Raises UAC:
+.\windows\bootstrap.ps1
 ```
 
 ```bash
@@ -33,9 +33,17 @@ git clone https://github.com/camilopiedra92/workstation ~/workstation
 ~/workstation/wsl/install.sh
 ```
 
-`winget configure` is idempotent by design. `install.sh` is idempotent by test:
-`check.sh` runs `install.sh --links-only` twice and asserts the second run
-changes nothing.
+Step 1 is `bootstrap.ps1` rather than `winget configure` typed directly, and the
+difference is not convenience. The script passes
+`--accept-configuration-agreements`, without which the command stops on a
+confirmation prompt; it asserts winget is new enough to have `configure` at all,
+turning "the command does nothing recognisable" into a sentence that says why;
+and it checks `$LASTEXITCODE` after every winget call, which is the one thing
+`$ErrorActionPreference = 'Stop'` does not do for you.
+
+`winget configure` is idempotent by design, so re-running the script is safe.
+`install.sh` is idempotent by test: `check.sh` runs `install.sh --links-only`
+twice and asserts the second run changes nothing.
 
 ## Architecture
 
@@ -402,17 +410,17 @@ Configs are validated against schemas, not merely parsed. Parsing is the easy
 half: a misspelled key is valid YAML, valid JSON and valid TOML, and the program
 reading it usually drops the option and carries on. The Windows Terminal
 settings are validated against Windows Terminal's published schema, and the TOML
-files against vendored schemas through `.taplo.toml`, which both the CLI and the
-*Even Better TOML* editor extension read — so the check and the autocomplete
-cannot disagree about what a valid key is.
+files against vendored schemas through `.taplo.toml`, which the CLI reads and so
+does the *Even Better TOML* editor extension where somebody has installed it —
+so the check and the autocomplete cannot disagree about what a valid key is.
 
 The schemas are **vendored** rather than fetched at check time. A gate must not
 need the network: a check that goes red because DNS blinked is a check you learn
 to ignore. Vendoring also puts a schema change in a diff somebody reads. The
 cost is that a vendored copy goes stale, and stale has a specific shape — adopt
 a key upstream added after the copy was taken, and the check calls your correct
-config invalid. `drift.sh` is what notices, because it is allowed to ask the
-network the questions the commit path must not.
+config invalid. **Nothing here notices that** — see the exemptions below for
+what it costs and why it was accepted.
 
 ### The checks were the most dangerous thing in this repo
 
@@ -600,12 +608,26 @@ eventually "fixes" it. Each of these is a real, defensible gap:
   authoritative document to vendor. The gap is unavoidable rather than an
   oversight. If VS Code ever publishes a static schema, it gets vendored under
   `schemas/` and validated like the rest.
-- **The vendored schemas carry no expiry**, unlike every pin here. They move
-  when upstream adds a key this repo wants to use, or when `drift.sh` reports
-  that the published copy has diverged in a way that matters — the same shape as
-  the font pin's "no expiry: it moves when a glyph problem makes it move".
-  `drift.sh` compares them as parsed JSON, so an upstream reindent is not
-  reported as a change worth acting on.
+- **The vendored schemas under `schemas/` have no staleness check.** Nothing
+  compares them against upstream and nothing notices when a published schema
+  moves. What that looks like when it happens: a key upstream has added is
+  rejected here with a message about an unknown property, which is a confusing
+  way to learn that a schema is old — the config is right and the check is
+  wrong, and the message says the opposite. Re-vendoring is therefore a manual
+  act, done when a key this repo wants to use is refused. Automating it would
+  mean a network call from a script that is otherwise entirely local, which is
+  the reason it has not been done rather than an oversight. That leaves the
+  schemas the one pin here whose renewal depends on somebody noticing, which is
+  worth saying out loud precisely because everything else was built not to.
+- **No VS Code extension is declared anywhere here**, and two of the sentences
+  above quietly depend on one. `.editorconfig` reaches the editor through the
+  EditorConfig extension, and `.taplo.toml` reaches it through *Even Better
+  TOML*; both are installed by hand today. The Mac repo's Brewfile carries its
+  extension list and this repo has no equivalent manifest yet, which makes this
+  the one place where "the environment is a repo, not a memory" does not hold.
+  Neither gap reaches the gates — shfmt and taplo read those files directly, so
+  the hook and CI are unaffected either way, and the exposure is that a fresh
+  machine's editor silently formats to its own defaults until somebody notices.
 - **Some authoring dependencies on the Windows host are undeclared, on
   purpose.** `configuration.winget` declares shellcheck, shfmt and taplo,
   because their whole justification is that the host and CI reach the same
@@ -616,8 +638,11 @@ eventually "fixes" it. Each of these is a real, defensible gap:
   `python3-yaml` and `python3-jsonschema` in `wsl/apt-packages.txt`, and as `jq`
   in `wsl/mise/config.toml`. `configuration.winget` declares the machine's steady
   state, and a transitional dependency written there would outlive its reason and
-  be believed by whoever reads it next. So `drift.sh` reporting the host's Python
-  and its packages is understood rather than investigated.
+  be believed by whoever reads it next. The consequence is that `drift.sh` names
+  the host's Python and its jq as installed-but-undeclared, which is understood
+  rather than investigated. The pip packages it does not name at all: that
+  section compares winget ids, so nothing here sees a pip install on the host in
+  either direction.
 
 ## Finding drift
 
@@ -628,21 +653,51 @@ eventually "fixes" it. Each of these is a real, defensible gap:
 Asking whether everything declared is installed is the easy direction, and a
 subset always answers yes. The gap it leaves is everything installed and never
 written down, which is the direction drift actually grows in. `drift.sh` reports
-both, for the host manifest and for each manager inside Ubuntu, plus any runtime
-a PATH lookup can reach that mise did not install — the rule stated at the top of
-this file.
+**both** directions, separately, because they mean different things and get
+fixed differently: declared but not present is a broken machine, and present but
+not declared is an undocumented one.
 
-It also asks the network the questions the commit path must not: whether
-anything mise installed has stopped being supported, whether a pinned tag has
-been superseded, and whether the vendored schemas still match what upstream
-publishes. That is drift against a calendar rather than between two files — a pin
-that was right when it was written becomes wrong on a date, and the only symptom
-is that security fixes quietly stop arriving.
+One section per manifest:
+
+| | compared against |
+|---|---|
+| `wsl/apt-packages.txt` | `apt-mark showmanual` — what was asked for, not the dependency tree apt pulled in behind it |
+| `wsl/mise/config.toml` | `mise ls --current`, by name and then by version |
+| `wsl/uv-tools.txt` | `uv tool list`, by name, and the pinned reference against each tool's receipt under `uv tool dir` |
+| `windows/configuration.winget` | `winget list` on the host, reached through `cmd.exe` by absolute path |
+
+Two of those are more than a name comparison, for reasons worth knowing. The
+mise section checks the resolved version too, because a tool installed at a
+different version than its pin is drift that a name-only comparison reports as
+agreement — allowing for the two pin styles in that file, since a major-only pin
+resolving to a full version is correct rather than drift. It also compares what
+mise says it was *asked* for against what this repo declares, which is how a
+different config layer winning over this one becomes visible. The uv section
+compares the **reference**, not the version, because `uv tool list` reports the
+resolved package version while `uv-tools.txt` pins a git tag; those never match,
+so the pin is checked against what uv recorded in the tool's receipt.
+
+The Windows section is the one that will report the most, and on this machine
+that is the right answer rather than noise: Git for Windows, GitHub CLI, Docker
+Desktop, Node and Python all predate this repo. Each is either adopted into
+`configuration.winget` or consciously left as known drift. What must not happen
+is nobody looking — and the fix for a noisy first run is never an allow-list,
+because a list this has been taught to stop reporting is a list that has stopped
+working.
 
 It is not part of `check.sh` and CI never runs it, on purpose. Every check in
 there has to mean the same thing on a runner as on this laptop; this one cannot,
-because a runner arrives with its own preinstalled packages and would report
-drift forever. Needing the network is the second reason.
+because a runner arrives with its own preinstalled packages, so "installed but
+undeclared" is always true there and never interesting. Wiring it into CI would
+either break the build forever on packages nobody put there, or get "fixed" with
+a CI-only skip — a check that skips itself on the one machine that would
+otherwise run it automatically.
+
+What it does **not** do, so nobody counts it as covered: it makes no network
+call. It does not ask whether a pinned version has been superseded, whether
+anything installed has left support, or whether the vendored schemas still match
+what upstream publishes. Every comparison it makes is between a file in this
+repo and the machine it is run on.
 
 ## Updating the pins
 
