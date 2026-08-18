@@ -51,16 +51,26 @@ FAILED=0
 SKIPPED=0
 
 check() { # check <name> <command...>
+  # Returns the wrapped command's exit status -- 0 on PASS, nonzero on FAIL --
+  # so this is a real predicate, not always-0. That still does not make
+  # `check X cmd || skip X reason` the right way to write a conditional check:
+  # skip's job is "the tool to run this at all is missing," which check() has
+  # no way to know just from what it wrapped failing. Conditional checks in
+  # this file are written in the guard form instead --
+  # `if have TOOL; then check ...; else skip ...; fi` -- see below.
   local name="$1"
   shift
-  local out
-  if out=$("$@" 2>&1); then
+  local out status
+  out=$("$@" 2>&1)
+  status=$?
+  if [ "$status" -eq 0 ]; then
     printf '%sPASS%s %s\n' "$GREEN" "$OFF" "$name"
   else
     printf '%sFAIL%s %s\n' "$RED" "$OFF" "$name"
     [ -n "$out" ] && printf '%s%s%s\n' "$DIM" "$out" "$OFF"
     FAILED=1
   fi
+  return "$status"
 }
 
 skip() { # skip <name> <reason>
@@ -118,6 +128,76 @@ fi
 
 syntax_bash() { for f in ./*.sh ./githooks/*; do bash -n "$f" || return 1; done; }
 check "bash syntax" syntax_bash
+
+# --- Windows layer -----------------------------------------------------------
+# The manifest is YAML, and YAML parses on any platform. Whether the package ids
+# inside it resolve is a different question, and one only a Windows machine with
+# winget can answer -- so it lives in the second CI job, not here. See practice
+# #8: out of a runner goes what that runner cannot answer honestly.
+have_pyyaml() { python3 -c "import yaml" > /dev/null 2>&1; }
+
+if have python3 && have_pyyaml; then
+  check "winget manifest is valid yaml" python3 -c "
+import sys, yaml
+yaml.safe_load(open('windows/configuration.winget'))
+"
+else
+  skip "winget manifest is valid yaml" "python3/pyyaml not installed"
+fi
+
+# The host layer declares three named groups: the substrate (WSL2 + Ubuntu), the
+# environment (terminal, font, editor, PowerToys), and the authoring tools this
+# repo's own checks need. Anything outside those three is the boundary leaking,
+# and a leak nobody notices is a leak that grows.
+#
+# The Script resource that installs Ubuntu is asserted separately: without it,
+# the distro could be deleted from the manifest, or its version silently
+# edited, and every check above would still pass -- the substrate is the one
+# thing here whose absence nothing else would notice.
+host_layer_stays_thin() {
+  python3 - << 'PY'
+import sys, yaml
+
+GROUPS = {
+    'substrate': {'Microsoft.WSL'},
+    'environment': {'Microsoft.WindowsTerminal', 'DEVCOM.JetBrainsMonoNerdFont',
+                     'Microsoft.VisualStudioCode', 'Microsoft.PowerToys'},
+    'authoring': {'koalaman.shellcheck', 'mvdan.shfmt', 'tamasfe.taplo'},
+}
+allowed = set().union(*GROUPS.values())
+
+doc = yaml.safe_load(open('windows/configuration.winget'))
+resources = doc['properties']['resources']
+
+declared = {
+    r['settings']['id']
+    for r in resources
+    if r['resource'].endswith('/WinGetPackage')
+}
+extra = declared - allowed
+if extra:
+    print('host layer declares packages outside the three known groups: %s' % ', '.join(sorted(extra)))
+    print('the known groups, so the fix is one line:')
+    for name, ids in GROUPS.items():
+        print('  %s: %s' % (name, ', '.join(sorted(ids))))
+    print('If this is deliberate, widen the appropriate group above and say why in the manifest.')
+    sys.exit(1)
+
+ubuntu = [r for r in resources if r.get('id') == 'ubuntu' and r['resource'] == 'PSDscResources/Script']
+if not ubuntu:
+    print('no PSDscResources/Script resource with id "ubuntu" found -- the substrate can silently vanish')
+    sys.exit(1)
+set_script = ubuntu[0].get('settings', {}).get('SetScript', '')
+if 'Ubuntu-26.04' not in set_script:
+    print('the ubuntu Script resource does not install Ubuntu-26.04 -- found:\n%s' % set_script)
+    sys.exit(1)
+PY
+}
+if have python3 && have_pyyaml; then
+  check "the host layer stays thin" host_layer_stays_thin
+else
+  skip "the host layer stays thin" "python3/pyyaml not installed"
+fi
 
 # --- Summary -----------------------------------------------------------------
 echo
