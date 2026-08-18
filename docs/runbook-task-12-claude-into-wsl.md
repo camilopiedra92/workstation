@@ -58,19 +58,13 @@ claude --version
 
 ## Step 3 — Apply the repo's settings
 
-`install.sh` already linked `statusline.sh`, `subagent-statusline.sh` and
-`CLAUDE.md` into `~/.claude/`. The settings file is **merged, not linked** —
-Claude Code rewrites it on its own (theme, `/config`), and a symlink would be
-overwritten. Same reason Windows Terminal's settings cannot be linked.
+`install.sh` already did this. It links `statusline.sh`, `subagent-statusline.sh`
+and `CLAUDE.md` into `~/.claude/`, and merges `settings.json` rather than linking
+it -- Claude Code rewrites that file on its own (theme, `/config`), and a symlink
+would be overwritten. Same reason Windows Terminal's settings cannot be linked.
+This step is only a check that it landed:
 
 ```bash
-mkdir -p ~/.claude
-if [ -f ~/.claude/settings.json ]; then
-  jq -s '.[0] * .[1]' ~/.claude/settings.json ~/workstation/wsl/claude/settings.json \
-    > /tmp/merged.json && mv /tmp/merged.json ~/.claude/settings.json
-else
-  cp ~/workstation/wsl/claude/settings.json ~/.claude/settings.json
-fi
 python3 -c "import json; json.load(open('$HOME/.claude/settings.json')); print('valid json')"
 ```
 

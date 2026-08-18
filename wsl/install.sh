@@ -16,7 +16,8 @@
 # What the check actually asserts is that link() is idempotent, which is the
 # half that respects $HOME. This flag makes the code match the claim instead of
 # doing far more and verifying far less: it runs only the symlinks and the git
-# identity file, and skips apt, mise, uv, antidote, chsh, /etc/wsl.conf and
+# identity file, and skips apt, mise, uv, the Claude Code settings merge (it
+# needs jq, which comes from mise), antidote, chsh, /etc/wsl.conf and
 # core.hooksPath -- everything with a sudo, a network fetch, or a real-system
 # side effect.
 set -euo pipefail
@@ -170,7 +171,26 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
     fi
   done < "$WSL_DIR/uv-tools.txt"
 
-  # --- 9. zsh plugins ------------------------------------------------------------
+  # --- 9. Claude Code settings ---------------------------------------------------
+  # Merged with jq rather than linked, because Claude Code rewrites this file on
+  # its own -- a symlink would be replaced by a regular file the first time the
+  # theme changed. Same reasoning as the VS Code settings below.
+  #
+  # The repo's values win on conflict, and anything the machine has added that
+  # the repo does not mention is preserved. jq comes from mise, which is why
+  # this step lives after the shim export above rather than earlier.
+  log "Merging Claude Code settings"
+  mkdir -p "$HOME/.claude"
+  if [ -f "$HOME/.claude/settings.json" ]; then
+    # jq reading and writing the same path truncates it before it has read
+    # anything, so the merged result is written to a temp file and moved in.
+    jq -s '.[0] * .[1]' "$HOME/.claude/settings.json" "$WSL_DIR/claude/settings.json" \
+      > "$HOME/.claude/settings.json.new" && mv "$HOME/.claude/settings.json.new" "$HOME/.claude/settings.json"
+  else
+    cp "$WSL_DIR/claude/settings.json" "$HOME/.claude/settings.json"
+  fi
+
+  # --- 10. zsh plugins -----------------------------------------------------------
   # wsl/zsh/.zshrc sources antidote from exactly this path. The two files have
   # to agree and only these comments say so -- on the Mac a package manager
   # owned the location, here nothing does.
@@ -179,13 +199,13 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
     git clone --depth=1 https://github.com/mattmc3/antidote.git "$XDG_DATA_HOME/antidote"
   fi
 
-  # --- 10. Login shell -----------------------------------------------------------
+  # --- 11. Login shell -----------------------------------------------------------
   if [ "$SHELL" != "$(command -v zsh)" ]; then
     log "Setting zsh as the login shell"
     sudo chsh -s "$(command -v zsh)" "$USER"
   fi
 
-  # --- 11. VS Code remote settings -----------------------------------------------
+  # --- 12. VS Code remote settings -----------------------------------------------
   # Copied rather than linked: VS Code Server rewrites this file when settings
   # are changed through the UI, and a symlink would end up overwritten.
   if [ -d "$HOME/.vscode-server" ]; then

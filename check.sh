@@ -129,6 +129,23 @@ english_only() {
 check "english only" english_only
 
 # --- Shell -------------------------------------------------------------------
+# Every tracked .sh must be executable in the index, not merely on disk. git
+# records the mode, and a script committed 100644 is "Permission denied" the
+# first time anything execs it -- which for the statuslines is Claude Code, on
+# the user's first session, with no error anyone sees. This check did not exist
+# before wsl/claude/statusline.sh, subagent-statusline.sh and
+# statusline-demo.sh reached the repo the same way -- ported now so it cannot
+# happen a third time.
+exec_bits() {
+  local bad
+  bad=$(git ls-files -s -- '*.sh' 'githooks/*' | awk '$1 != "100755" { print $4 }')
+  [ -z "$bad" ] || {
+    echo "tracked but not executable: $bad"
+    return 1
+  }
+}
+check "tracked scripts are executable in git" exec_bits
+
 if have shellcheck; then
   check "shellcheck" shellcheck -x ./*.sh ./githooks/* ./wsl/claude/*.sh ./wsl/install.sh
 else
