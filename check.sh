@@ -130,18 +130,18 @@ check "english only" english_only
 
 # --- Shell -------------------------------------------------------------------
 if have shellcheck; then
-  check "shellcheck" shellcheck -x ./*.sh ./githooks/*
+  check "shellcheck" shellcheck -x ./*.sh ./githooks/* ./wsl/claude/*.sh
 else
   skip "shellcheck" "not installed"
 fi
 
 if have shfmt; then
-  check "shfmt" shfmt -d ./*.sh ./githooks/*
+  check "shfmt" shfmt -d ./*.sh ./githooks/* ./wsl/claude/*.sh
 else
   skip "shfmt" "not installed"
 fi
 
-syntax_bash() { for f in ./*.sh ./githooks/*; do bash -n "$f" || return 1; done; }
+syntax_bash() { for f in ./*.sh ./githooks/* ./wsl/claude/*.sh; do bash -n "$f" || return 1; done; }
 check "bash syntax" syntax_bash
 
 # --- Windows layer -----------------------------------------------------------
@@ -479,6 +479,18 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 # invisible to this check, including for a real assumption written into it
 # later.
 #
+# wsl/claude/CLAUDE.md is excluded like docs/**, for the same reason: its
+# "Windows boundary" section is prose stating this exact rule, not code
+# assuming it. Filtering by "# or //" would not reach it -- Markdown prose
+# starts with neither -- so it is excluded by path instead, the same
+# exception already made for docs/**.
+#
+# A `Read(/mnt/c...)` line is filtered too, but narrowly: it is a deny-list
+# entry whose entire purpose is refusing that path, the opposite of assuming
+# it is workable. The filter is scoped to `Read(`, not the whole file, so a
+# real assumption elsewhere in settings.json -- an additionalDirectories
+# entry pointed at /mnt/c, say -- still fails this check.
+#
 # The pattern deliberately omits the leading slash. Git for Windows rewrites
 # an argument that looks like an absolute Unix path into a Windows path
 # before git.exe sees it, so '/mnt/c' matches nothing here -- the check
@@ -487,8 +499,9 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 # platform.
 no_mnt_c() {
   local hits
-  hits=$(git grep -nI 'mnt/c' -- . ':!docs/**' ':!check.sh' |
-    grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' || true)
+  hits=$(git grep -nI 'mnt/c' -- . ':!docs/**' ':!check.sh' ':!wsl/claude/CLAUDE.md' |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' |
+    grep -vE 'Read\(/mnt/c' || true)
   [ -z "$hits" ] || {
     echo "$hits"
     return 1
@@ -521,6 +534,111 @@ no_macos_in_ignore() {
   }
 }
 check "git/ignore carries no macOS entries" no_macos_in_ignore
+
+# --- Claude Code -------------------------------------------------------------
+check "claude settings" python3 -c "import json; json.load(open('wsl/claude/settings.json'))"
+
+# The host's credential stores are readable from inside WSL. They are not on the
+# Mac, because there is no host. Denying ~/.ssh while leaving the Windows one
+# readable protects the key and hands over the one beside it.
+deny_covers_the_host() {
+  python3 - << 'PY'
+import json, sys
+deny = json.load(open('wsl/claude/settings.json'))['permissions']['deny']
+need = ['/mnt/c/Users/*/.ssh/**', '/mnt/c/Users/*/.aws/**',
+        '/mnt/c/Users/*/AppData/Roaming/gh/hosts.yml']
+missing = [n for n in need if 'Read(%s)' % n not in deny]
+if missing:
+    print('deny does not cover the Windows host: %s' % ', '.join(missing))
+    sys.exit(1)
+PY
+}
+check "the deny list covers the Windows host, not just Linux" deny_covers_the_host
+
+# effortLevel absent on purpose: the model's own default is already high, and
+# writing it down would freeze it -- a better default in a future model would be
+# overridden by a line nobody revisits.
+no_effort_level() {
+  python3 -c "
+import json, sys
+s = json.load(open('wsl/claude/settings.json'))
+sys.exit(1 if 'effortLevel' in s else 0)
+" || {
+    echo "effortLevel is set; it freezes a default that improves on its own"
+    return 1
+  }
+}
+check "effortLevel is absent on purpose" no_effort_level
+
+# ── Statusline behaviour ─────────────────────────────────────────────────────
+# These are pure functions from a JSON payload to a line of text, which makes
+# them the one thing here that can be tested properly.
+printf '\n%sStatusline%s\n' "$DIM" "$OFF"
+
+check "demo renders" bash -c './wsl/claude/statusline-demo.sh > /dev/null'
+
+# A freshly opened session has no context and no limits yet. Printing a broken
+# line there is worse than printing a short one.
+minimal_payload() {
+  local out
+  out=$(echo '{"model":{"display_name":"Opus 5"},"cwd":"/tmp"}' | ./wsl/claude/statusline.sh)
+  case "$out" in
+    *"Opus 5"*) return 0 ;;
+    *)
+      echo "model missing from a minimal payload: $out"
+      return 1
+      ;;
+  esac
+}
+check "minimal payload still renders the model" minimal_payload
+
+# Garbage in must mean nothing out, never a half-rendered line: Claude prints
+# whatever we emit, junk included.
+invalid_json_is_silent() {
+  local out
+  out=$(echo 'not json' | ./wsl/claude/statusline.sh)
+  [ -z "$out" ] || {
+    echo "emitted output for invalid JSON: $out"
+    return 1
+  }
+}
+check "invalid json produces no output" invalid_json_is_silent
+
+subagent_rows() {
+  local payload out
+  payload='{"columns":80,"tasks":[
+    {"id":"a","name":"brisk-otter","type":"local_agent","status":"running",
+     "startTime":1,"model":"claude-opus-5","contextWindowSize":200000,
+     "tokenCount":48000,"tokenSamples":[1,2,3]},
+    {"id":"b","type":"local_bash","status":"running","startTime":1,"tokenCount":0}]}'
+  out=$(echo "$payload" | ./wsl/claude/subagent-statusline.sh)
+
+  [ "$(echo "$out" | wc -l | tr -d ' ')" = 2 ] || {
+    echo "expected 2 rows, got: $out"
+    return 1
+  }
+  echo "$out" | jq -e . > /dev/null || {
+    echo "not valid JSONL: $out"
+    return 1
+  }
+  echo "$out" | jq -e 'has("id") and has("content")' > /dev/null || return 1
+
+  # The name is the only part of the row you can address an agent by, so its
+  # absence is a regression worth failing on.
+  echo "$out" | head -1 | jq -e '.content | contains("brisk-otter")' > /dev/null ||
+    {
+      echo "agent name missing from the row"
+      return 1
+    }
+
+  # A task without a name must still render, not vanish.
+  echo "$out" | tail -1 | jq -e '.content | length > 0' > /dev/null ||
+    {
+      echo "unnamed task rendered empty"
+      return 1
+    }
+}
+check "subagent rows are valid jsonl with the agent name" subagent_rows
 
 # --- Summary -----------------------------------------------------------------
 echo
