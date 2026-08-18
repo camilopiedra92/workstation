@@ -206,8 +206,19 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
   if [ -f "$HOME/.claude/settings.json" ]; then
     # jq reading and writing the same path truncates it before it has read
     # anything, so the merged result is written to a temp file and moved in.
-    jq -s '.[0] * .[1]' "$HOME/.claude/settings.json" "$WSL_DIR/claude/settings.json" \
-      > "$HOME/.claude/settings.json.new" && mv "$HOME/.claude/settings.json.new" "$HOME/.claude/settings.json"
+    #
+    # This one is an `if` rather than `cmd && cmd` on purpose. set -e exempts a
+    # failing command in an AND-list, which is right for the guards elsewhere in
+    # this script and wrong here: a jq failure would skip the mv, leave the
+    # settings unmerged, and let the script finish reporting success -- the
+    # exact outcome this step exists to prevent.
+    if ! jq -s '.[0] * .[1]' "$HOME/.claude/settings.json" "$WSL_DIR/claude/settings.json" \
+      > "$HOME/.claude/settings.json.new"; then
+      rm -f "$HOME/.claude/settings.json.new"
+      echo "    jq could not merge $HOME/.claude/settings.json -- is it valid JSON?" >&2
+      exit 1
+    fi
+    mv "$HOME/.claude/settings.json.new" "$HOME/.claude/settings.json"
   else
     cp "$WSL_DIR/claude/settings.json" "$HOME/.claude/settings.json"
   fi
