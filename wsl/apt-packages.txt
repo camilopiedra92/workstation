@@ -1,0 +1,52 @@
+# Packages apt installs, one per line. `#` starts a comment.
+#
+# This list is deliberately short, and the boundary is the reason. apt installs
+# what the SYSTEM needs -- compilers, libraries, the shell itself, things other
+# packages link against. Everything YOU use comes from mise, which pins with a
+# checksum where apt gives you whatever is in the archive that day.
+#
+# Adding a tool here that mise could install is how the boundary starts leaking.
+# The test: would this still need to exist if you never opened a terminal? If
+# yes, apt. If no, mise.
+
+# Build toolchain. mise compiles some tools from source and every one of them
+# fails without this, with an error that names a missing header rather than a
+# missing package.
+build-essential
+pkg-config
+libssl-dev
+
+# The shell. It is the login shell, so it must come from the system: a shell
+# installed under a version manager cannot be listed in /etc/shells.
+zsh
+
+# Fetching and unpacking, which mise itself needs before it can install anything.
+curl
+ca-certificates
+unzip
+
+# git is here rather than from mise for the same reason as zsh: it is what the
+# system's own tooling shells out to.
+git
+
+# check.sh parses windows/configuration.winget to verify the host layer stays
+# thin and that the Ubuntu resource has not silently changed version. That
+# parse needs an interpreter to run and a YAML reader once it is running --
+# Python's standard library has no YAML module, so both entries below are
+# check.sh's dependency. Do not remove python3 as apparently unused just
+# because nothing else here names it directly; it is the interpreter check.sh
+# itself runs on.
+#
+# From apt rather than uv or pip: python3-yaml is a library, not a
+# command-line application, so uv-tools.txt is the wrong manifest for it --
+# and a check that gates every commit should not depend on a package manager
+# that is itself installed by the thing being checked.
+python3
+python3-yaml
+
+# Task 3's check validates windows/terminal/settings.json against the vendored
+# Windows Terminal schema. Same category as python3-yaml above: a library the
+# checks need, from apt rather than uv, because uv-tools.txt is for command-line
+# applications and because the gate on every commit should not depend on a
+# package manager the gate is also checking.
+python3-jsonschema

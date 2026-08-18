@@ -1,0 +1,85 @@
+# Runtimes and tools, pinned.
+#
+# The boundary: apt installs what the system needs, mise installs everything you
+# use. The Mac repo's rule -- never a runtime through the system package manager
+# -- is preserved; what widens is mise's domain, to user tools as well. That
+# serves the pinning discipline better than apt does, because the ubi and aqua
+# backends install at a fixed version with a checksum while apt gives whatever
+# is in the archive that day.
+#
+# These are exact pins, and exact pins go stale. bump-tools.sh (Task 14) moves
+# them, so the chore is a command rather than a memory. Pinning by hand is how
+# `eza = "0.24.7"` -- a version that was never released -- reached this file in
+# the first place.
+
+[tools]
+# A major, not "lts", and that is a deliberate choice with an expiry date.
+#
+# 26 is Current today: it entered on 2026-04-21 and becomes Active LTS on
+# 2026-10-28, supported until 2029-04-30. Asking for it by number is the only
+# way to be on it before that date, since "lts" resolves to 24 until then.
+#
+# The two converge in October. Once 26 is the LTS, changing this back to "lts"
+# is a no-op that restores the tracking -- the pin moves on its own again
+# instead of freezing here until someone remembers to edit it. Do that then.
+#
+# What this is NOT is "latest". That would land on 27 next October, and
+# odd-numbered majors never become LTS: they ship in October and are out of
+# support roughly six months later.
+node = "26"
+
+# Python has no LTS and none of the reasoning above transfers. Every stable
+# release gets the same five years, so the newest stable simply is the
+# recommended one. 3.14 shipped 2025-10-07, supported to 2030-10-31.
+#
+# The minor is pinned rather than "latest" for the one reason that does apply:
+# 3.15 arrives this October and the C-extension packages that matter take months
+# to publish wheels for it.
+#
+# One version, not two. The Mac carries a second 3.13 solely because the gcloud
+# CLI ships no interpreter and gsutil refuses anything above 3.13. There is no
+# gcloud on this machine, so that entry is not carried. It comes back when
+# gcloud does, with the same reasoning written next to it -- copying it now would
+# be carrying a workaround for a problem this machine does not have.
+python = "3.14"
+
+# The package manager for new node projects. Here rather than in a global npm
+# install because `npm i -g` writes into the node install directory down to the
+# patch, so a patch bump moves that directory and the global vanishes without a
+# word. mise owns this the way it owns the runtimes.
+#
+# pnpm rather than npm because npm's node_modules is flat: a package can require
+# something it never declared, because a transitive dependency got hoisted next
+# to it. pnpm's layout is symlinked, so a package resolves only what it declares.
+#
+# The major is the pin because the lockfile format travels with it.
+pnpm = "11"
+
+# The GitHub CLI. It authenticates git -- git/config sets its credential helper
+# to `gh auth git-credential`, so a missing gh is not a missing convenience, it
+# is every push failing with an opaque credential error.
+#
+# From mise rather than apt for the usual reason, which bites harder here than
+# elsewhere: apt's gh trails upstream, and this is the one tool here whose auth
+# flow moves with the service it talks to.
+gh = "2.97.0"
+
+# ---- User tools ----
+# Everything below would come from Homebrew on the Mac. Here they come from mise,
+# for the reason in the header: pinned with a checksum rather than whatever apt
+# has. The version is a floor written as an exact pin so a bump is a visible diff.
+#
+# Verified against each project's `releases/latest` on 2026-08-18 with
+# `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name`, form and all: jq
+# tags releases as `jq-1.8.2`, ripgrep and delta publish bare numbers, the rest
+# carry a leading `v` that mise expects written off.
+starship = "1.26.0" # the prompt; not in apt at all
+eza = "0.23.5"      # ls, with icons the Nerd Font carries
+bat = "0.26.1"      # cat, with syntax highlighting
+fd = "10.4.2"       # find, and what FZF_DEFAULT_COMMAND calls
+ripgrep = "15.2.0"  # grep
+fzf = "0.74.3"      # the fuzzy picker fzf-tab drives
+zoxide = "0.10.0"   # cd, with frecency
+jq = "1.8.2"        # what statusline.sh parses its payload with
+delta = "0.19.2"    # git's pager
+uv = "0.12.5"       # Python packages, venvs and the CLIs in uv-tools.txt

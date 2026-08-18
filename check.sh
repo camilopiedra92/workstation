@@ -411,6 +411,46 @@ else
   skip "the terminal opens on wsl, matching the distro configuration.winget installs" "python3/pyyaml not installed"
 fi
 
+# --- WSL manifests -----------------------------------------------------------
+if have taplo; then
+  check "toml" taplo lint
+  check "toml format" taplo fmt --check --diff
+else
+  skip "toml" "taplo not installed"
+  skip "toml format" "taplo not installed"
+fi
+
+# Every tool in uv-tools.txt carries a reference, because a bare name resolves to
+# whatever PyPI has today -- which is the pin thrown away, silently.
+uv_tools_manifest() {
+  local line name ref bad=0
+  while read -r line; do
+    line=${line%%#*}
+    [ -z "${line// /}" ] && continue
+    read -r name ref <<< "$line"
+    if [ -z "$ref" ]; then
+      echo "no reference for $name"
+      bad=1
+    fi
+  done < wsl/uv-tools.txt
+  return "$bad"
+}
+check "uv-tools.txt declares a pinned reference per tool" uv_tools_manifest
+
+# apt and mise must not both claim the same package. A tool installed by two
+# managers has two versions and one PATH, and which one wins is an accident.
+no_manager_overlap() {
+  local apt_list mise_list dupes
+  apt_list=$(sed 's/#.*//' wsl/apt-packages.txt | tr -d ' ' | grep -v '^$' | sort)
+  mise_list=$(sed 's/#.*//' wsl/mise/config.toml | grep -oE '^[a-z0-9_-]+ = ' | tr -d ' =' | sort)
+  dupes=$(comm -12 <(echo "$apt_list") <(echo "$mise_list"))
+  [ -z "$dupes" ] || {
+    echo "declared by both apt and mise: $dupes"
+    return 1
+  }
+}
+check "apt and mise do not claim the same package" no_manager_overlap
+
 # --- Summary -----------------------------------------------------------------
 echo
 if [ "$FAILED" -ne 0 ]; then
