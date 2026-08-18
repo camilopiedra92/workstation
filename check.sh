@@ -514,11 +514,19 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 #                     to that exact string so a permissive entry -- an
 #                     additionalDirectories pointing at /mnt/c, say -- still
 #                     fires in the same file.
+#   'mnt/c/Windows/System32/'  reaching a Windows system binary by absolute path
+#                     is not the same as treating /mnt/c as a working path.
+#                     drift.sh needs cmd.exe to reach winget.exe, because
+#                     install.sh removes the Windows PATH from WSL on purpose.
+#                     Scoped to System32 rather than to drift.sh: that file is
+#                     the likeliest place a real /mnt/c assumption would appear,
+#                     so it must stay visible to this check.
 no_mnt_c() {
   local hits
   hits=$(git grep -nI 'mnt/c' -- . ':!*.md' ':!check.sh' |
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' |
-    grep -vE '"Read\(/mnt/c' || true)
+    grep -vE '"Read\(/mnt/c' |
+    grep -vE 'mnt/c/Windows/System32/' || true)
   [ -z "$hits" ] || {
     echo "$hits"
     return 1
