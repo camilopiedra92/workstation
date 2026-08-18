@@ -86,23 +86,26 @@ properties:
           wsl.exe --install -d Ubuntu-26.04 --no-launch
 
     # ---- The environment ----
-    # Deliberately unpinned, but NOT unasserted -- those are different things,
+    # Deliberately unpinned, but NOT unasserted -- those are different states,
     # and conflating them is how this block read before the first real apply.
     #
-    # Unpinned, because each of these updates itself out of band and a `version`
-    # here would describe a state the machine contradicts within days -- and if
-    # honoured, would hold back security updates on a browser-grade editor and a
-    # terminal. Microsoft.WSL, above, is unpinned for the same reason.
+    # Unpinned, because a `version` here would have to be maintained by hand
+    # against software that ships often, and a stale pin would hold back
+    # security updates on the two largest attack surfaces on this machine -- a
+    # browser-grade editor and a terminal. Microsoft.WSL, above, is unpinned
+    # for the same reason.
     #
-    # useLatest: true, because "installed at any version" is not a desired state
-    # worth declaring. Measured on this machine at the first real apply: without
-    # it, `winget configure` reported "Unit successfully applied" over a Windows
-    # Terminal at 1.18.10301.0 while 1.24.11911.0 was available -- six minor
-    # versions behind, because `Ensure: Present` with no version and no
-    # useLatest is satisfied by any installed version, including a stale one.
-    # The Store was not silently keeping it current either. A manifest that
-    # reports success while delivering a 2023 build is worse than one that says
-    # nothing.
+    # Current, because `useLatest` makes every apply an upgrade when one is
+    # available. That is the mechanism, and it is in-band: nothing outside
+    # this file keeps these current. An earlier version of this comment
+    # claimed they "update themselves out of band" -- the first real apply
+    # disproved it. Windows Terminal sat at 1.18.10301.0 with 1.24.11911.0
+    # available while the run reported "Unit successfully applied", because
+    # `Ensure: Present` with no version and no useLatest is satisfied by any
+    # installed version, stale included. The Store was not saving it either.
+    #
+    # So: do not remove useLatest as redundant. It is the only thing keeping
+    # these current, and its absence fails silently and successfully.
     #
     # The font is the exception in this group, and it is pinned instead. Nothing
     # updates it, and its version moves glyph metrics -- which this repo already

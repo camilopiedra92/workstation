@@ -36,8 +36,9 @@ function Assert-WingetSuccess([string]$What) {
 # winget configure landed in v1.6.2631. Asserting the floor turns "the command
 # does nothing recognisable" into a sentence that says why.
 Write-Step 'Checking winget version'
-$wingetVersion = (winget --version).TrimStart('v')
+$wingetVersionOutput = winget --version
 Assert-WingetSuccess 'winget --version'
+$wingetVersion = $wingetVersionOutput.TrimStart('v')
 $required = [version]'1.6.2631'
 if ([version]($wingetVersion -split '-')[0] -lt $required) {
     throw "winget $wingetVersion is older than $required, which is where 'winget configure' was added. Update from the Microsoft Store (App Installer)."
