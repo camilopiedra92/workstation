@@ -249,6 +249,47 @@ else
   skip "windows terminal settings match the published schema" "jsonschema not installed"
 fi
 
+# --- Every action id and keybinding id resolve to each other -----------------
+# The schema (checked above) validates actions and keybindings independently --
+# it has no way to know they are supposed to refer to each other, so it happily
+# accepts a keybindings id with a typo, or an actions id nothing ever binds.
+# Either one passes schema validation and does nothing on the machine, silently.
+# Same argument as the font-coherence and startingDirectory checks below and
+# above: two places naming the same thing agree because something makes them,
+# not because whoever edits one remembers the other.
+actions_and_keybindings_resolve() {
+  python3 - << 'PY'
+import json, re, sys
+
+def jsonc(path):
+    s = open(path, encoding='utf-8').read()
+    s = re.sub(r'^\s*//.*$', '', s, flags=re.M)
+    s = re.sub(r',(\s*[}\]])', r'\1', s)
+    return json.loads(s)
+
+wt = jsonc('windows/terminal/settings.json')
+action_ids = {a['id'] for a in wt.get('actions', []) if 'id' in a}
+keybinding_ids = {k['id'] for k in wt.get('keybindings', []) if 'id' in k}
+
+problems = []
+orphan_keybindings = keybinding_ids - action_ids
+orphan_actions = action_ids - keybinding_ids
+if orphan_keybindings:
+    problems.append('keybindings reference an id no action defines: %s' % ', '.join(sorted(orphan_keybindings)))
+if orphan_actions:
+    problems.append('actions define an id no keybinding references: %s' % ', '.join(sorted(orphan_actions)))
+
+for p in problems:
+    print(p)
+sys.exit(1 if problems else 0)
+PY
+}
+if have python3; then
+  check "every action id and keybinding id resolve to each other" actions_and_keybindings_resolve
+else
+  skip "every action id and keybinding id resolve to each other" "python3 not installed"
+fi
+
 # --- One Nerd Font, declared everywhere it renders ---------------------------
 # Two fonts installed is not better than one. When something falls back, or a
 # family name is misspelled, a second Nerd Font lets it resolve to the wrong one
