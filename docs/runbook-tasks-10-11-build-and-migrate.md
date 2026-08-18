@@ -51,6 +51,50 @@ wsl --shutdown
 Then reopen the terminal. This is not optional — `install.sh` writes
 `/etc/wsl.conf` and WSL only reads it at boot.
 
+## Step 3b — Set your git identity. Do this before you commit anything.
+
+`install.sh` created `~/.config/git/config.local` with **placeholders**, because
+this repository is public and a real name and address cannot live in it. Nothing
+else will remind you.
+
+```bash
+cat ~/.config/git/config.local
+```
+
+It says `CHANGE ME` and `change@me.invalid`. Replace them:
+
+```bash
+cat > ~/.config/git/config.local <<'EOF'
+[user]
+	name = CHANGE ME
+	email = 142334282+camilopiedra92@users.noreply.github.com
+EOF
+```
+
+That address is the GitHub noreply form, which is what your `dotfiles` repo
+already commits with — it keeps your real address off public repositories. Use
+your real one instead if you would rather; this file is outside the repo and each
+machine carries its own.
+
+Then confirm git actually sees it:
+
+```bash
+git config --get user.name
+git config --get user.email
+```
+
+**Both must print your values, not the placeholders.** If they print nothing,
+`config.local` is not being included — check that `~/.config/git/config` exists
+and is a symlink into the repo.
+
+**Why this step is here rather than left to the message `install.sh` prints:**
+git accepts any string as an identity. It will not refuse a commit authored by
+`CHANGE ME <change@me.invalid>` — that was measured, not assumed. So a forgotten
+placeholder is not caught at commit time; it is caught weeks later, in a log,
+and the only fix is rewriting history.
+
+---
+
 ## Step 4 — Confirm interop is actually narrowed
 
 ```bash
@@ -108,6 +152,21 @@ cd ~/workstation && ./check.sh --strict
 including zsh — which has been the one expected failure on Windows for three
 tasks. If anything still reports `FAIL (not installed)`, it names a tool the
 manifests forgot; send it to me.
+
+**Two checks run here for the first time anywhere**, so read a failure from
+either as "this ran for the first time", not as "the environment is broken":
+
+- `install.sh --links-only is idempotent` — skipped on Windows because that
+  filesystem has no symlinks. This machine does, so it finally executes.
+- `zsh syntax` — skipped everywhere until zsh existed.
+
+If either fails, send me the output rather than working around it. A first
+execution failing is information; it is the reason the check was written.
+
+Note that `githooks/pre-commit` runs `check.sh --strict` on **every** commit
+here, so a failure in either of those blocks committing until it is fixed. That
+is the gate working as designed, but it is worth knowing before it surprises you
+mid-commit.
 
 ## Step 8 — Look at the prompt
 
