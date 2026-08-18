@@ -9,20 +9,20 @@
 #   CI tools (shellcheck, shfmt, actionlint, taplo): a version in
 #   .github/workflows/ci.yml's env vars, the same version restated in that
 #   file's "Tools are the pinned versions" step, a checksum in
-#   .github/tool-checksums.txt, and -- for the three of them the host also
-#   runs -- a matching version in windows/configuration.winget. All four move
-#   together or CI and the host stop agreeing on what a clean file looks
-#   like.
+#   .github/tool-checksums.txt, and -- for the three of them the host and WSL
+#   also run -- a matching version in windows/configuration.winget and in
+#   wsl/mise/config.toml. They move together in the same pass, or the file
+#   they lint gets a different verdict depending on which of the three ran
+#   it -- check.sh's "the linter versions agree across all three manifests"
+#   is what asserts that never happens quietly.
 #
-#   The mise pins in wsl/mise/config.toml: eleven of them, ten user tools
-#   plus gh. There is no checksum for these, so the pass is simpler -- read
-#   the latest release, rewrite the pin, leave the reasoning comment alone.
-#   Widened into this script for the reason this ruling exists at all: every
-#   one of those eleven numbers was wrong when the plan for this repo was
-#   written, and one of them -- eza = "0.24.7" -- named a version that was
-#   never published. mise install would have failed on the user's machine. A
-#   tool whose reason is written down gets used; pinning by hand is what
-#   this replaces.
+#   The mise pins in wsl/mise/config.toml: the user tools, plus gh. There is
+#   no checksum for these, so the pass is simpler -- read the latest release,
+#   rewrite the pin, leave the reasoning comment alone. Widened into this
+#   script for the reason this ruling exists at all: one of those pins,
+#   eza = "0.24.7", named a version that was never published -- mise install
+#   would have failed on the user's machine. A tool whose reason is written
+#   down gets used; pinning by hand is what this replaces.
 #
 # node, python and pnpm in wsl/mise/config.toml are deliberately out of
 # scope: they are pinned by major or minor, each with its own reasoning
@@ -50,7 +50,7 @@ HOST_MANIFEST=windows/configuration.winget
 MISE_CONFIG=wsl/mise/config.toml
 
 CI_TOOLS="shellcheck shfmt actionlint taplo"
-MISE_TOOLS="gh starship eza bat fd ripgrep fzf zoxide jq delta uv"
+MISE_TOOLS="gh starship eza bat fd ripgrep fzf zoxide jq delta uv fastfetch"
 
 BOLD=$'\033[1m'
 GREEN=$'\033[32m'
@@ -195,9 +195,10 @@ for tool in $CI_TOOLS; do
 
   # windows/configuration.winget pins the three of these it also runs on the
   # host (not actionlint, which the host never does) to the identical
-  # version, in its own version field and in that resource's description.
-  # Move it in the same pass or host and CI silently stop agreeing on what a
-  # clean file looks like.
+  # version, in its own version field and in that resource's description, and
+  # wsl/mise/config.toml pins the same three for WSL. Move both in the same
+  # pass or the host, CI and WSL silently stop agreeing on what a clean file
+  # looks like.
   case "$tool" in
     shellcheck | shfmt | taplo)
       awk -v id="      id: $tool" -v have="$have" -v want="$want" '
@@ -207,6 +208,12 @@ for tool in $CI_TOOLS; do
         { print }
       ' "$HOST_MANIFEST" > "$tmp/manifest"
       mv "$tmp/manifest" "$HOST_MANIFEST"
+
+      # Same rewrite the mise-pins loop below uses: only the quoted version
+      # moves, the trailing comment (none of these three carry one) is
+      # carried through unchanged either way.
+      sed -E "s|^($tool = \")[^\"]*(\".*)\$|\1$want\2|" "$MISE_CONFIG" > "$tmp/mise"
+      mv "$tmp/mise" "$MISE_CONFIG"
       ;;
   esac
 
@@ -231,18 +238,20 @@ mise_repo_of() {
     jq) echo jqlang/jq ;;
     delta) echo dandavison/delta ;;
     uv) echo astral-sh/uv ;;
+    fastfetch) echo fastfetch-cli/fastfetch ;;
   esac
 }
 
 # Each project's tag form, the same as wsl/mise/config.toml's own header
-# records them: jq tags as jq-1.8.2, ripgrep and delta publish bare numbers,
-# everything else carries a leading v that mise expects stripped off.
+# records them: jq tags as jq-1.8.2, ripgrep, delta and fastfetch publish
+# bare numbers, everything else carries a leading v that mise expects
+# stripped off.
 mise_latest_of() {
   local tag
   tag=$(gh api "repos/$(mise_repo_of "$1")/releases/latest" --jq .tag_name) || return 1
   case "$1" in
     jq) echo "${tag#jq-}" ;;
-    ripgrep | delta) echo "$tag" ;;
+    ripgrep | delta | fastfetch) echo "$tag" ;;
     *) echo "${tag#v}" ;;
   esac
 }
