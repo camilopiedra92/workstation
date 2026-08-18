@@ -42,6 +42,8 @@
       "Read(/mnt/c/Users/*/.ssh/**)",
       "Read(/mnt/c/Users/camilo.piedrahita/.aws/**)",
       "Read(/mnt/c/Users/*/.aws/**)",
+      "Read(/mnt/c/Users/camilo.piedrahita/.azure/**)",
+      "Read(/mnt/c/Users/*/.azure/**)",
       "Read(/mnt/c/Users/camilo.piedrahita/AppData/Roaming/gcloud/**)",
       "Read(/mnt/c/Users/*/AppData/Roaming/gcloud/**)",
       "Read(/mnt/c/Users/camilo.piedrahita/AppData/Roaming/gh/hosts.yml)",

@@ -589,6 +589,7 @@ deny = json.load(open('wsl/claude/settings.json', encoding='utf-8'))['permission
 templates = [
     '/mnt/c/Users/{}/.ssh/**',
     '/mnt/c/Users/{}/.aws/**',
+    '/mnt/c/Users/{}/.azure/**',
     '/mnt/c/Users/{}/.docker/config.json',
     '/mnt/c/Users/{}/.git-credentials',
     '/mnt/c/Users/{}/.claude/.credentials.json',
@@ -598,9 +599,18 @@ templates = [
     '/mnt/c/Users/{}/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt',
 ]
 need = []
-for t in templates:
-    need.append(t.format('camilo.piedrahita'))
-    need.append(t.format('*'))
+for p in templates:
+    # The guard below is not defensive noise. str.format() ignores its argument
+    # when there is no {} to fill, so a template written without one yields two
+    # identical entries -- the loop still appends twice, the count still looks
+    # right, and the check silently verifies one string twice while reporting
+    # that it verified both forms. That is the same shape as a check that
+    # passes while inspecting nothing.
+    if '{}' not in p:
+        print('template has no {} placeholder, so both forms would be identical: %s' % p)
+        sys.exit(1)
+    need.append(p.format('camilo.piedrahita'))
+    need.append(p.format('*'))
 
 missing = [n for n in need if 'Read(%s)' % n not in deny]
 if missing:
