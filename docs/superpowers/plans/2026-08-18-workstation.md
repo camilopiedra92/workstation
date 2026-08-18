@@ -1885,7 +1885,7 @@ if [ ! -f "$XDG_CONFIG_HOME/git/config.local" ]; then
   cat > "$XDG_CONFIG_HOME/git/config.local" << 'EOF'
 [user]
 	name = CHANGE ME
-	email = the personal address
+	email = change@me.invalid
 EOF
   echo "    $XDG_CONFIG_HOME/git/config.local"
 fi

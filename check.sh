@@ -535,23 +535,29 @@ check "gitconfig parses" git config --file wsl/git/config --list
 # Grepped across the whole tree, not just wsl/git/config: that file was never
 # the only door into the repo, and it was the only one guarded. install.sh's
 # own git-identity heredoc walked straight past a check that grepped one file
-# and reported PASS. *.md is excluded because prose describing the pattern
-# (this comment included) is not the pattern; check.sh excludes itself for the
-# same reason -- its own check function has to spell out what it is looking
-# for.
+# and reported PASS. check.sh excludes itself because its own check function
+# has to spell out what it is looking for.
+#
+# No file-type exclusion here, deliberately. An earlier version skipped *.md to
+# avoid matching `name=$(basename ...)` in a runbook; that also hid a real
+# address in the plan document for a round. Requiring whitespace before the `=`
+# separates the two by syntax rather than by file type -- shell assignment cannot
+# have a space there, git config conventionally does -- so there is no file this
+# check cannot see.
 #
 # install.sh still writes lines shaped exactly like `name = ...` and
 # `email = ...` -- that heredoc is the git-config skeleton config.local is
-# supposed to look like, placeholders and all, and a check that flagged its
-# own placeholders would fail forever, on every commit, for a file that is
-# correct. The two values excluded below are wsl/install.sh's placeholders,
-# verbatim; only those two exact values are let through, so a real name or
-# address dropped into that same heredoc -- or anywhere else -- still fails.
-# The two files have to agree and only these comments say so.
+# supposed to look like, placeholders and all, and a check that flagged its own
+# placeholders would fail forever, on every commit, for a file that is correct.
+# The allowlist below is anchored to the whole `path:lineno:content` line, front
+# and back: unanchored, `grep -v` only needs the line to END in a placeholder,
+# so `email = real@person.com  # was: email = change@me.invalid` would launder
+# straight through. Only wsl/install.sh's placeholders, verbatim and alone on
+# the line, are let through; a real name or address anywhere else still fails.
 no_identity_in_repo() {
   local hits
-  hits=$(git grep -nE '^[[:space:]]*(name|email)[[:space:]]*=' -- . ':!*.md' ':!check.sh' |
-    grep -vE '=[[:space:]]*(CHANGE ME|change@me\.invalid)[[:space:]]*$' || true)
+  hits=$(git grep -nE '^[[:space:]]*(name|email)[[:space:]]+=' -- . ':!check.sh' |
+    grep -vE '^[^:]+:[0-9]+:[[:space:]]*(name|email)[[:space:]]+=[[:space:]]*(CHANGE ME|change@me\.invalid)$' || true)
   [ -z "$hits" ] || {
     echo "identity in the repo: $hits"
     return 1
@@ -724,6 +730,25 @@ check "subagent rows are valid jsonl with the agent name" subagent_rows
 # NOT exercised here -- those steps never run under --links-only -- and stays
 # deferred to a real run: see docs/runbook-tasks-10-11-build-and-migrate.md,
 # which is where a human first sees the full script run twice.
+
+# On this Windows host `ln -s` does not fail -- it silently copies the target
+# instead of linking it, so the capability has to be probed rather than
+# assumed from the presence of some other tool. `have apt-get && have sudo`
+# used to stand in for "a real Ubuntu host," but --links-only needs neither of
+# those: a Linux CI container without a sudo binary would skip this check, and
+# CI forces --strict, turning a check that would have passed into a FAIL for a
+# reason the guard's own text gets wrong.
+have_symlinks() {
+  local d probe
+  d=$(mktemp -d) || return 1
+  : > "$d/target"
+  ln -s target "$d/link" 2> /dev/null
+  [ -L "$d/link" ]
+  probe=$?
+  rm -rf "$d"
+  return "$probe"
+}
+
 install_is_idempotent() {
   local tmphome first second status=0
   tmphome=$(mktemp -d)
@@ -759,10 +784,10 @@ install_is_idempotent() {
   rm -rf "$tmphome"
   return "$status"
 }
-if have apt-get && have sudo; then
+if have_symlinks; then
   check "install.sh --links-only is idempotent" install_is_idempotent
 else
-  skip "install.sh --links-only is idempotent" "needs apt-get and sudo (a real Ubuntu host)"
+  skip "install.sh --links-only is idempotent" "this filesystem does not support symlinks"
 fi
 
 # --- Summary -----------------------------------------------------------------
