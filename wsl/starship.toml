@@ -1,0 +1,57 @@
+# Starship — https://starship.rs/config
+# Two-line prompt: the command always starts in the same column, no matter how
+# long the path or the branch name is.
+
+add_newline = true
+
+format = """
+$directory$git_branch$git_status$python$nodejs$rust$cmd_duration
+$character"""
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+style = "bold cyan"
+
+[git_branch]
+symbol = " "
+style = "bold purple"
+
+[git_status]
+style = "bold yellow"
+# Only the actionable bits: conflicts, uncommitted changes, unpushed commits
+conflicted = "⚠"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked = "?${count}"
+modified = "!${count}"
+staged = "+${count}"
+stashed = "≡"
+
+# Runtimes only show up inside a project that uses them.
+# That way the prompt reflects what mise has actually activated.
+[python]
+symbol = " "
+style = "bold yellow"
+format = '[$symbol$version]($style) '
+
+[nodejs]
+symbol = " "
+style = "bold green"
+format = '[$symbol$version]($style) '
+
+[rust]
+symbol = " "
+style = "bold red"
+format = '[$symbol$version]($style) '
+
+# Warns when a command is slow: useful so you do not sit staring at the screen
+[cmd_duration]
+min_time = 2000
+format = "[took $duration]($style) "
+style = "bold yellow"

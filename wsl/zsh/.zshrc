@@ -1,0 +1,139 @@
+# ═══════════════════════════════════════════════════════════
+#  .zshrc  —  managed in ~/dotfiles
+#  Plugins: antidote with static loading (see .zsh_plugins.txt)
+# ═══════════════════════════════════════════════════════════
+
+# ---------- PATH ----------
+# There is none here on purpose. PATH is built in .zshenv and re-asserted in
+# .zprofile after macOS runs path_helper; setting any of it here would mean a
+# directory that exists only where a terminal is attached, which is the bug
+# those two files exist to close.
+
+# ---------- History ----------
+# The most useful thing and the one almost nobody configures: by default zsh
+# keeps few lines and loses them when several windows close at once.
+#
+# Under state and not config: this is data the shell writes, not something you
+# edit or would ever want versioned. XDG draws that line and zsh, being older
+# than the spec, does not -- hence the explicit path.
+HISTFILE="${XDG_STATE_HOME:-$HOME/.local/state}/zsh/history"
+[[ -d "${HISTFILE:h}" ]] || mkdir -p "${HISTFILE:h}"
+HISTSIZE=100000
+SAVEHIST=100000
+setopt HIST_IGNORE_ALL_DUPS      # a repeated command does not clutter history
+setopt HIST_IGNORE_SPACE         # command with a leading space = not saved
+setopt HIST_REDUCE_BLANKS
+setopt HIST_VERIFY               # when expanding !!, show before running
+setopt SHARE_HISTORY             # history shared across terminals
+setopt EXTENDED_HISTORY          # store a timestamp for each command
+
+# ---------- Behavior ----------
+setopt AUTO_CD                   # "Development" == "cd Development"
+setopt AUTO_PUSHD                # every cd pushes the previous one
+setopt PUSHD_IGNORE_DUPS
+setopt INTERACTIVE_COMMENTS      # allow # comments at the prompt
+setopt NO_BEEP
+
+# ---------- Plugins (antidote) ----------
+# Safety net: several ohmyzsh plugins write here and outside the framework the
+# variable does not exist.
+export ZSH_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+[[ -d "$ZSH_CACHE_DIR/completions" ]] || mkdir -p "$ZSH_CACHE_DIR/completions"
+
+# Static loading: antidote only runs if .zsh_plugins.txt has changed. On a
+# normal startup this is a single `source` of an already generated file.
+zsh_plugins_txt="${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
+zsh_plugins_zsh="${ZDOTDIR:-$HOME}/.zsh_plugins.zsh"
+if [[ ! ${zsh_plugins_zsh} -nt ${zsh_plugins_txt} ]]; then
+  # Path comes from install.sh, which git-clones antidote to $XDG_DATA_HOME. On the
+  # Mac this was a Homebrew prefix; here there is no package manager involved, so
+  # the two files have to agree on a path and only this comment says so.
+  source "${XDG_DATA_HOME:-$HOME/.local/share}/antidote/antidote.zsh"
+  antidote bundle <"${zsh_plugins_txt}" >| "${zsh_plugins_zsh}"
+fi
+source "${zsh_plugins_zsh}"
+
+# ---------- Completion ----------
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'   # case insensitive
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+# fzf-tab replaces the native menu, so it is disabled to avoid duplication
+zstyle ':completion:*' menu no
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'
+zstyle ':fzf-tab:*' switch-group '<' '>'
+
+# ---------- Runtimes ----------
+# mise manages node, python, go... per the mise.toml of each project
+eval "$(mise activate zsh)"
+
+# ---------- Prompt ----------
+eval "$(starship init zsh)"
+
+# ---------- Smart navigation ----------
+# zoxide learns from your cd's: "cd dotfiles" jumps there from anywhere.
+#
+# --cmd cd is zoxide's own way of taking over cd, and replaces `alias cd='z'`.
+# The alias left `cd` completing as the builtin, so tab offered subdirectories
+# of the current directory and never the database zoxide had just learned.
+eval "$(zoxide init --cmd cd zsh)"
+
+# ---------- Fuzzy finding ----------
+# Ctrl+R  history   |   Ctrl+T  files   |   Alt+C  cd into a directory
+source <(fzf --zsh)
+export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+export FZF_ALT_C_COMMAND='fd --type d --hidden --exclude .git'
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
+
+# ---------- Keys ----------
+# Up/down arrows search history by what you have already typed.
+#
+# Both sequences, which is what the plugin's own README asks for: a terminal in
+# normal mode sends ^[[A and in application mode ^[OA, and which one you get
+# depends on whether something enabled the keypad transmit mode. Binding one of
+# the two leaves the arrows silently falling back to plain history in the other.
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+bindkey '^[OA' history-substring-search-up
+bindkey '^[OB' history-substring-search-down
+bindkey '^[[1;5C' forward-word      # Ctrl+right
+bindkey '^[[1;5D' backward-word     # Ctrl+left
+
+# ---------- Aliases ----------
+alias ls='eza --icons --group-directories-first'
+alias ll='eza -l --icons --group-directories-first --git'
+alias la='eza -la --icons --group-directories-first --git'
+alias lt='eza --tree --level=2 --icons'
+alias cat='bat --style=plain --paging=never'
+
+alias workstation='cd ~/workstation'
+alias reload='exec zsh'
+
+# Update the whole environment at once (antidote included)
+alias update-all='sudo apt update && sudo apt upgrade -y && mise upgrade && antidote update'
+
+# Windows interop, deliberately narrow. These are the only Windows binaries
+# this environment calls, and naming them individually is what keeps
+# /mnt/c/... off PATH -- see the note in .zshenv about why that matters for
+# correctness and not only for speed.
+alias explorer='explorer.exe'
+alias clip='clip.exe'
+
+# ---------- Editor ----------
+export EDITOR="code --wait"
+export VISUAL="$EDITOR"
+
+# ---------- Claude Code ----------
+alias c='claude'
+alias cc='claude --continue'    # resume the last session in this folder
+
+# ---------- Greeting ----------
+# Around 10ms, so the cost is not the reason for the guard: a banner reprinted
+# by every nested shell turns a greeting into noise. SHLVL is 1 in a terminal
+# tab and in an editor's integrated terminal, and only grows when a shell is
+# opened inside another one.
+[[ $SHLVL -eq 1 ]] && fastfetch
+
+# ---------- Local (not versioned) ----------
+# For secrets, tokens and settings specific to this machine. Next to this file
+# rather than in $HOME, so everything zsh reads lives in one directory.
+[ -f "${ZDOTDIR:-$HOME}/.zshrc.local" ] && source "${ZDOTDIR:-$HOME}/.zshrc.local"

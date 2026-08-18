@@ -1,0 +1,43 @@
+# zsh plugins — managed by antidote
+#
+# Order MATTERS:
+#   completions -> compinit -> rest -> syntax highlighting -> history search
+#
+# To add one: write it here and `exec zsh`. antidote clones it and regenerates
+# the static file by itself. Catalog: github.com/topics/zsh-plugins
+#
+# WATCH OUT for ohmyzsh plugins: some depend on the framework's internal
+# variables (ZSH_CACHE_DIR). The .zshrc defines it as a safety net, but before
+# adding one, check it does not duplicate something mise already provides — gh,
+# mise, uv, bat, eza, fd, rg, zoxide and starship all ship their own
+# completions.
+
+# ---------- Completions ----------
+# Extra completions for hundreds of commands zsh does not cover out of the box
+zsh-users/zsh-completions kind:fpath
+
+# Runs compinit at the right moment and caches the dump.
+# AFTER the fpath entries, BEFORE anything depending on completions.
+mattmc3/ez-compinit
+
+# Tab completion with an fzf interface: a fuzzy-searchable picker instead of a
+# flat list. This is the plugin you notice most day to day.
+Aloxaf/fzf-tab
+
+# ---------- From Oh My Zsh, only the useful bits ----------
+# Works without loading the whole framework (3054 lines we save ourselves)
+ohmyzsh/ohmyzsh path:plugins/git       # aliases: gst, gco, gcm, glog...
+ohmyzsh/ohmyzsh path:plugins/extract   # `extract file` for any archive format
+
+# ---------- Experience ----------
+# Suggests the full command in gray as you type (right arrow accepts)
+zsh-users/zsh-autosuggestions
+
+# ---------- Last, in this order ----------
+# Faster and more accurate than zsh-syntax-highlighting. kind:defer loads it
+# after the prompt is drawn, so it does not delay startup.
+zdharma-continuum/fast-syntax-highlighting kind:defer
+
+# Up arrow searches history by what you have already typed.
+# AFTER the highlighting or the bindings clobber each other.
+zsh-users/zsh-history-substring-search

@@ -451,6 +451,53 @@ no_manager_overlap() {
 }
 check "apt and mise do not claim the same package" no_manager_overlap
 
+# --- zsh and the prompt -------------------------------------------------------
+syntax_zsh() {
+  have zsh || return 0
+  for f in wsl/zsh/.zshenv wsl/zsh/.zshrc; do zsh -n "$f" || return 1; done
+}
+if have zsh; then
+  check "zsh syntax" syntax_zsh
+else
+  skip "zsh syntax" "zsh not installed"
+fi
+
+# The Mac's .zprofile does not belong here and its absence is deliberate. This
+# asserts nobody reintroduces it by reflex when copying from the other repo.
+no_zprofile() {
+  [ ! -e wsl/zsh/.zprofile ] || {
+    echo "wsl/zsh/.zprofile exists. It solved macOS path_helper, which Linux does not have."
+    return 1
+  }
+}
+check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofile
+
+# Nothing in the repo may assume /mnt/c is a working path.
+#
+# check.sh, wsl/zsh/.zshenv, wsl/zsh/.zshrc and windows/terminal/settings.json
+# are excluded for the same reason: each of them mentions /mnt/c only to
+# explain why it is deliberately kept off PATH or unset, and that explanation
+# is the point of those files, not a violation of this rule.
+#
+# MSYS2_ARG_CONV_EXCL matters on this platform specifically: Git for Windows
+# rewrites a leading-slash argument like '/mnt/c' into a Windows path before
+# git.exe ever sees it, so without this the pattern silently matches nothing
+# and the check passes no matter what the files say. Confirmed by hand: with
+# the mangling in effect this check found zero hits against files that
+# plainly contained the string. git on Linux CI does not do this rewrite, so
+# the variable is a no-op there.
+no_mnt_c() {
+  local hits
+  hits=$(MSYS2_ARG_CONV_EXCL='/mnt/c' git grep -nI '/mnt/c' -- . ':!docs/**' \
+    ':!check.sh' ':!wsl/zsh/.zshenv' ':!wsl/zsh/.zshrc' \
+    ':!windows/terminal/settings.json' || true)
+  [ -z "$hits" ] || {
+    echo "$hits"
+    return 1
+  }
+}
+check "no file assumes /mnt/c" no_mnt_c
+
 # --- Summary -----------------------------------------------------------------
 echo
 if [ "$FAILED" -ne 0 ]; then
