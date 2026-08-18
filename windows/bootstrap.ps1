@@ -12,7 +12,6 @@
 
 $ErrorActionPreference = 'Stop'
 
-$repo = Split-Path -Parent $PSScriptRoot
 $manifest = Join-Path $PSScriptRoot 'configuration.winget'
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Blue }

@@ -430,6 +430,57 @@ else
   skip "the terminal opens on wsl, matching the distro configuration.winget installs" "python3/pyyaml not installed"
 fi
 
+# --- PowerShell ----------------------------------------------------------------
+# windows/*.ps1 gets no static analysis anywhere else: this file is Windows-
+# agnostic by design (see the header above), and neither CI job looked at the
+# scripts themselves until now -- only at the manifest and settings files they
+# apply. bootstrap.ps1 is also the one script in this repo that raises UAC and
+# changes the machine, so this only parses it, never runs it. The AST parser
+# answers "is this syntactically valid PowerShell" without executing a line --
+# [System.Management.Automation.Language.Parser]::ParseFile, not Invoke-Expression
+# or dot-sourcing.
+#
+# Written to a temp .ps1 file and run with -File rather than piped over stdin:
+# both Windows PowerShell and pwsh treat piped stdin as a series of interactive
+# commands, not a script block, and a pipeline's scriptblock variables (here,
+# whether any file failed to parse) do not survive that -- confirmed directly,
+# not assumed, after a first attempt silently checked nothing and still
+# reported success.
+powershell_parses() {
+  local ps script status
+  if have pwsh; then
+    ps=pwsh
+  elif have powershell; then
+    ps=powershell
+  else
+    return 1
+  fi
+  script=$(mktemp --suffix=.ps1) || return 1
+  cat > "$script" << 'PS1'
+$ErrorActionPreference = 'Stop'
+$failed = $false
+Get-ChildItem -Path 'windows' -Filter '*.ps1' | ForEach-Object {
+  $tokens = $null
+  $parseErrors = $null
+  [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
+  if ($parseErrors.Count -gt 0) {
+    $failed = $true
+    foreach ($e in $parseErrors) { Write-Output "$($_.Name): $e" }
+  }
+}
+if ($failed) { exit 1 } else { exit 0 }
+PS1
+  "$ps" -NoProfile -NonInteractive -File "$script"
+  status=$?
+  rm -f "$script"
+  return "$status"
+}
+if have pwsh || have powershell; then
+  check "powershell parses" powershell_parses
+else
+  skip "powershell parses" "no powershell available"
+fi
+
 # --- WSL manifests -----------------------------------------------------------
 if have taplo; then
   check "toml" taplo lint
@@ -437,6 +488,20 @@ if have taplo; then
 else
   skip "toml" "taplo not installed"
   skip "toml format" "taplo not installed"
+fi
+
+# --- GitHub Actions workflows -------------------------------------------------
+# .github/workflows/ci.yml is otherwise the one file in this repo nothing
+# lints: it is YAML, so the schema and manifest checks above do not touch it,
+# and it is not shell. actionlint is pinned, checksum-verified and version-
+# asserted in ci.yml's own ubuntu job already -- installing it there had no
+# second purpose until now. actionlint with no arguments finds the nearest
+# .github/workflows directory on its own, confirmed against `actionlint
+# --help` rather than assumed.
+if have actionlint; then
+  check "actionlint" actionlint
+else
+  skip "actionlint" "not installed"
 fi
 
 # Every tool in uv-tools.txt carries a reference, because a bare name resolves to

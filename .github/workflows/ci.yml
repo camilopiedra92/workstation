@@ -43,6 +43,11 @@ jobs:
       # These versions match what windows/configuration.winget pins for the
       # host's authoring-tools group, so CI and the machine run the same
       # binaries on the same file. Bump both together -- bump-tools.sh does.
+      #
+      # actionlint used to be pinned and version-asserted here with nothing
+      # in the repo that actually called it -- ci.yml was the one file
+      # nothing linted. It now lints this very workflow too, in ./check.sh
+      # below, so this install has a second purpose, not only a proven one.
       - name: Install tools
         env:
           SHELLCHECK_VERSION: 0.11.0
@@ -167,6 +172,36 @@ jobs:
           }
           if ($bad) { throw "unresolvable package ids: $($bad -join ', ')" }
 
+      # An id resolving proves winget knows the package; it says nothing about
+      # whether the exact version this repo pins is one winget can install.
+      # bump-tools.sh writes these versions from GitHub releases, and
+      # winget's catalogue lags behind GitHub -- so a bump can pin a version
+      # that exists upstream and not in winget, this job stays green, and the
+      # failure lands mid-`winget configure`, on the user's machine, behind a
+      # UAC prompt. Same failure shape as H2's bogus DSC resource name, one
+      # field over.
+      #
+      # `winget show --version` is documented as "Use the specified version;
+      # default is the latest version" (`winget show --help`), and tested
+      # directly here rather than assumed: a real pin (shellcheck 0.11.0)
+      # exits 0, a fabricated one (99.99.99) exits nonzero.
+      #
+      # Resources with no `version` -- the four `useLatest` ones -- have
+      # nothing to check here; that absence is deliberate, not missed
+      # coverage, and is exactly what the manifest's own comment says about
+      # them: pin what stays put, assert-latest on what moves on its own.
+      - name: Every declared package version is available
+        shell: pwsh
+        run: |
+          $pinned = python -c "import yaml; doc = yaml.safe_load(open('windows/configuration.winget', encoding='utf-8')); [print(r['settings']['id'] + ' ' + str(r['settings']['version'])) for r in doc['properties']['resources'] if r['resource'].endswith('/WinGetPackage') and 'version' in r.get('settings', {})]"
+          $bad = @()
+          foreach ($line in $pinned) {
+            $id, $v = $line -split ' ', 2
+            winget show --id $id --version $v --exact | Out-Null
+            if ($LASTEXITCODE -ne 0) { $bad += "$id $v" }
+          }
+          if ($bad) { throw "pinned versions winget cannot offer: $($bad -join ', ')" }
+
       # winget configure validate does NOT catch a bogus resource name inside
       # a module that resolves -- tested directly with
       # PSDscResources/ScriptBogus, which validated clean. validate catches
@@ -192,3 +227,42 @@ jobs:
             if (-not $found) { $bad += $r }
           }
           if ($bad) { throw "DSC resource not found in the gallery: $($bad -join ', ')" }
+
+      # windows/*.ps1 got no static analysis anywhere until now -- check.sh's
+      # own PowerShell check only proves a file parses; this proves it also
+      # follows PSScriptAnalyzer's rules. bootstrap.ps1 is the one script here
+      # that raises UAC and changes the machine, which is exactly why this
+      # analyzes rather than runs it: Invoke-ScriptAnalyzer reads the file, it
+      # does not execute it.
+      #
+      # windows-latest ships PSScriptAnalyzer preinstalled (1.25.0, per
+      # actions/runner-images' own Windows2022-Readme.md) -- but taking
+      # whatever the image happens to have is the same drift this repo
+      # rejects for shellcheck, shfmt, actionlint and taplo: a linter that
+      # reports something different after an image update is a linter you
+      # stop trusting. Pinned by version instead of by what shipped, via
+      # Install-Module rather than a checksummed download: PSScriptAnalyzer
+      # has no plain artifact+SHA256 the way the four Linux tools do, so
+      # there is no line to add to tool-checksums.txt for it. The trust this
+      # pin relies on is PSGallery verifying the package's own signature,
+      # not a hash recorded in this repo -- a different mechanism, stated
+      # here rather than left as a silent gap in "nothing is latest."
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0 -Force -Scope CurrentUser
+
+      # PSAvoidUsingWriteHost is excluded deliberately, not left uncaught:
+      # bootstrap.ps1 is run by a human at a terminal, never composed into
+      # another script or imported as a module, and its Write-Step/Write-Host
+      # calls exist specifically for the -ForegroundColor coloring that marks
+      # each stage of an elevated, UAC-raising script -- Write-Output or
+      # Write-Information would drop exactly the signal those colors carry.
+      # Every other default rule stays enabled and fails the job on any hit.
+      - name: PSScriptAnalyzer over windows/*.ps1
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path windows -Recurse -ExcludeRule PSAvoidUsingWriteHost
+          if ($results) {
+            $results | Format-Table -AutoSize | Out-String | Write-Output
+            throw "PSScriptAnalyzer found $($results.Count) issue(s)"
+          }
