@@ -53,6 +53,7 @@ properties:
       settings:
         id: Microsoft.WSL
         source: winget
+        useLatest: true
 
     # Ubuntu 26.04 LTS is not in winget -- Canonical ships it through
     # `wsl --install`, and winget's newest is 24.04. It is declared here with the
@@ -85,21 +86,31 @@ properties:
           wsl.exe --install -d Ubuntu-26.04 --no-launch
 
     # ---- The environment ----
-    # Windows Terminal, VS Code and PowerToys are deliberately unpinned, and the
-    # reason is not laziness: each updates itself out of band, through the Store
-    # or its own in-app updater. A `version` here would describe a state the
-    # machine contradicts within days, so the manifest would be documenting a
-    # fiction. And if the pin were honoured it would hold back security updates
-    # on the two largest attack surfaces here -- a browser-grade editor and a
+    # Deliberately unpinned, but NOT unasserted -- those are different things,
+    # and conflating them is how this block read before the first real apply.
+    #
+    # Unpinned, because each of these updates itself out of band and a `version`
+    # here would describe a state the machine contradicts within days -- and if
+    # honoured, would hold back security updates on a browser-grade editor and a
     # terminal. Microsoft.WSL, above, is unpinned for the same reason.
     #
-    # The font is the exception in this group, and it is pinned. Nothing updates
-    # it, and its version moves glyph metrics -- which this repo already cares
-    # about enough to give a dedicated coherence check.
+    # useLatest: true, because "installed at any version" is not a desired state
+    # worth declaring. Measured on this machine at the first real apply: without
+    # it, `winget configure` reported "Unit successfully applied" over a Windows
+    # Terminal at 1.18.10301.0 while 1.24.11911.0 was available -- six minor
+    # versions behind, because `Ensure: Present` with no version and no
+    # useLatest is satisfied by any installed version, including a stale one.
+    # The Store was not silently keeping it current either. A manifest that
+    # reports success while delivering a 2023 build is worse than one that says
+    # nothing.
     #
-    # The rule rather than a tally: pin what stays put, leave what moves on its
-    # own. Counts in comments go stale, and this file has already had one -- it
-    # said "four kinds of thing" while declaring five.
+    # The font is the exception in this group, and it is pinned instead. Nothing
+    # updates it, and its version moves glyph metrics -- which this repo already
+    # cares about enough to give a dedicated coherence check.
+    #
+    # The rule rather than a tally: pin what stays put, assert-latest on what
+    # moves on its own. Counts in comments go stale, and this file has already
+    # had one -- it said "four kinds of thing" while declaring five.
 
     # ---- The terminal ----
     # Replaces Ghostty, which does not run on Windows and is not on its roadmap.
@@ -112,6 +123,7 @@ properties:
       settings:
         id: Microsoft.WindowsTerminal
         source: winget
+        useLatest: true
 
     # ---- The font ----
     # Exactly one Nerd Font, and check.sh asserts that it is exactly one. Two
@@ -143,6 +155,7 @@ properties:
       settings:
         id: Microsoft.VisualStudioCode
         source: winget
+        useLatest: true
 
     # ---- Mac muscle memory ----
     # PowerToys is here for Keyboard Manager specifically, which Microsoft's own
@@ -155,6 +168,7 @@ properties:
       settings:
         id: Microsoft.PowerToys
         source: winget
+        useLatest: true
 
     # ---- Authoring tools ----
     # These do not belong to the environment; they belong to working on THIS
