@@ -80,8 +80,8 @@ The evidence, from primary sources:
 - Nix, the ceiling for reproducibility, officially supports only macOS and
   Linux. On Windows it runs under WSL2. Choosing native Windows would close that
   door permanently.
-- WSL2's ext4 is 9–20x faster than `/mnt/c` for build artifacts, and I/O latency
-  dropped roughly 40% over 2025.
+- WSL2's ext4 is dramatically faster than `/mnt/c`, measured on this machine
+  rather than cited from a benchmark. See below.
 - Anthropic documents WSL2 as the recommended WSL version for Claude Code.
 
 Ghostty does not run on Windows and is not on its roadmap, so the terminal is
@@ -92,14 +92,17 @@ with no equivalent path.
 
 ```
 ┌─ WINDOWS HOST ───────────────────────────── thin, declarative ─────┐
-│  Declared by:  windows/configuration.dsc.yaml   (WinGet DSC)       │
+│  Declared by:  windows/configuration.winget     (WinGet DSC)       │
 │                                                                    │
 │   · WSL2 + Ubuntu 26.04 LTS          the substrate                 │
 │   · Windows Terminal                 replaces Ghostty              │
-│   · VS Code + Remote-WSL             editor, runs on the host      │
+│   · VS Code                          editor, runs on the host,     │
+│                                      edits over Remote-WSL         │
 │   · JetBrainsMono Nerd Font          the same font as on the Mac   │
 │   · PowerToys                        Keyboard Manager, for Mac     │
 │                                      muscle memory                 │
+│   · shellcheck, shfmt, taplo         authoring THIS repo, a        │
+│                                      separate group and job        │
 │                                                                    │
 │  No runtimes. No repositories. No development happens here.        │
 ├─ WSL2 / UBUNTU 26.04 LTS ─────────────────── the real environment ─┤
@@ -117,11 +120,12 @@ with no equivalent path.
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-The Windows layer is deliberately thin. Everything in it exists to make the WSL
-layer reachable, visible or typeable — a terminal, a font, an editor, the
-subsystem itself. The moment something that is not one of those four things
-wants to be installed on the host, that is the signal the boundary is being
-crossed for a bad reason.
+The Windows layer is deliberately thin, and it does two jobs. Most of it exists
+to make the WSL layer reachable, visible or typeable — the subsystem, a
+terminal, a font, an editor. The rest is the tools needed to author this repo,
+kept in their own named group so the first list cannot quietly absorb them.
+The moment something that belongs to neither job wants to be installed on the
+host, that is the signal the boundary is being crossed for a bad reason.
 
 ## Load-bearing decisions
 
@@ -145,9 +149,14 @@ set and its authenticated session all live on the Windows side today.
 ### 2. Repositories live on ext4, never on `/mnt/c`
 
 The seven projects currently under `C:\Users\camilo.piedrahita\Development` are
-re-cloned into `~/Development` inside Ubuntu. The 9–20x penalty on `/mnt/c` is
-not a tuning detail; it is the single most common way a WSL setup is made to
-feel slow and then blamed on WSL.
+re-cloned into `~/Development` inside Ubuntu.
+
+**Measured on this machine on 2026-08-18, under Ubuntu 26.04 on WSL2, creating
+2000 files: ext4 (`~`) 0.065s, `/mnt/c` 7.554s — a factor of 116.** Public
+benchmarks report nine to twenty times, which is what this section originally
+cited; the measurement supersedes it, and the two are not the same kind of
+claim. The penalty is not a tuning detail; it is the single most common way a
+WSL setup is made to feel slow and then blamed on WSL.
 
 Windows can still reach them through `\\wsl$\Ubuntu-26.04\home\...` when
 something genuinely needs to. That path is for looking, not for working.
@@ -221,9 +230,10 @@ workstation/
 │   └── dependabot.yml
 ├── githooks/{pre-commit,pre-push}
 ├── schemas/                        vendored: mise, starship, windows-terminal
+├── docs/                           runbooks for the interactive steps
 ├── docs/superpowers/specs/
 ├── windows/
-│   ├── configuration.dsc.yaml      the Brewfile's role
+│   ├── configuration.winget        the Brewfile's role
 │   ├── bootstrap.ps1               the only imperative step
 │   ├── terminal/settings.json      Windows Terminal
 │   └── vscode/settings.json        host-side editor settings
@@ -236,23 +246,45 @@ workstation/
     ├── starship.toml
     ├── git/{config,ignore}
     ├── vscode/settings.json        remote-side editor settings
-    ├── claude/
-    │   ├── settings.json
-    │   ├── CLAUDE.md
-    │   ├── statusline.sh
-    │   ├── subagent-statusline.sh
-    │   └── statusline-demo.sh
-    └── bin/
+    └── claude/
+        ├── settings.json
+        ├── CLAUDE.md
+        ├── statusline.sh
+        ├── subagent-statusline.sh
+        └── statusline-demo.sh
 ```
+
+`wsl/bin/` was in the original sketch and is not built. The Mac's `bin/` holds
+`dev-nuke.sh` and two MCP wrappers, none of which port; nothing else has asked
+for a directory yet, and an empty one declares an intention rather than a fact.
 
 ## The Windows layer
 
-### `configuration.dsc.yaml`
+### `configuration.winget`
 
 WinGet Configuration is the Brewfile's counterpart and it is not a compromise:
 declarative YAML, idempotent, official, and applied with one command. It
-declares WSL2, Ubuntu 26.04 LTS, Windows Terminal, VS Code with the Remote-WSL
-extension, JetBrainsMono Nerd Font, and PowerToys.
+declares WSL2, Ubuntu 26.04 LTS, Windows Terminal, VS Code, JetBrainsMono Nerd
+Font, PowerToys, and — as a separate, named group — the shellcheck, shfmt and
+taplo used to author this repo, pinned to the versions CI installs.
+
+**The file is `configuration.winget`, not `configuration.dsc.yaml`.** That is
+Microsoft's documented extension and it is what carries the schema association.
+The rest of their convention, `./.config/configuration.winget`, is not followed:
+`.config/` at the repo root would place the Windows layer outside the
+two-strata structure this repo is organised by.
+
+Two things the manifest does that a package list alone would not:
+
+- **Ubuntu 26.04 is installed by an inbox DSC `Script` resource, not a package
+  id.** `Canonical.Ubuntu.2604` does not exist in winget — the newest there is
+  24.04, and downgrading would trade two years of support for the convenience
+  of using one tool for everything. `TestScript` is what keeps it idempotent.
+- **The packages that are not version-pinned carry `useLatest: true`.**
+  `Ensure: Present` is satisfied by any installed version, so without it the
+  manifest reports success over a build years out of date — which is exactly
+  what the first real apply did to Windows Terminal on this machine. Unpinned
+  and unasserted are different states, and this file wants the first.
 
 `git` is deliberately **not declared** on the host. All git work happens in WSL,
 and `gh auth setup-git` inside Ubuntu provides credentials there, mirroring the
@@ -298,10 +330,26 @@ is vendored under `schemas/` and enforced by `check.sh`. This replaces
 configuration rather than code — and the one whose absence let CI report success
 while validating no Ghostty config at all.
 
-Three settings do not port: `font-thicken` (a macOS antialiasing correction),
-`window-colorspace = display-p3`, and `macos-glass` blur. They are recorded in
-the file as explicitly not ported. A dropped setting that is written down is
-information; one that is silently omitted is a hole.
+The settings that do not port are recorded in the file itself as explicitly not
+ported: `font-thicken` (a macOS antialiasing correction), `window-colorspace =
+display-p3`, `background-blur = macos-glass`, `window-padding-color = extend`
+and `minimum-contrast`. A dropped setting that is written down is information;
+one that is silently omitted is a hole.
+
+`font.cellHeight` exists only in the schema and not in Microsoft's prose
+reference, which is why it survived: the schema was grepped rather than the
+documentation read. Its description defines it as a CSS-style line-height
+multiple with a natural default near 1.2, so Ghostty's `adjust-cell-height =
+12%` translates to 134% by derivation rather than by estimate.
+
+`defaultProfile` names the profile rather than a GUID, and `profiles.list`
+carries no WSL entry: Windows Terminal generates that profile and derives its
+GUID from the distro name, so a hand-written GUID would point at nothing or
+create a duplicate beside the real one. Every appearance setting therefore
+lives in `profiles.defaults`, which generated profiles inherit. That includes
+`startingDirectory`, which is overridden back to `%USERPROFILE%` on the
+PowerShell profile — an inversion that reads backwards and is explained in the
+README and in the file.
 
 ## The WSL layer
 
@@ -324,13 +372,24 @@ Also gone: `ohmyzsh/plugins/macos` (`ofd`, `pfd`, `cdf`), `bin/dev-nuke.sh`
 becomes Active LTS on 2026-10-28, at which point the pin returns to `"lts"` and
 starts tracking on its own again.
 
-`python = ["3.14"]`, single-valued. The Mac carries a second 3.13 solely because
+`python = "3.14"`, single-valued. The Mac carries a second 3.13 solely because
 gcloud ships no interpreter and gsutil refuses anything above 3.13. There is no
 gcloud on this machine, so that entry is not carried. It comes back only when
 gcloud does, with the same reasoning written next to it. Copying it now would be
 carrying a workaround for a problem this machine does not have.
 
 `pnpm = "11"` carries over unchanged.
+
+`gh` is declared here too, and from mise rather than apt. It is not a
+convenience: `git/config` sets the credential helper to `gh auth
+git-credential`, so a missing `gh` is every push failing with an opaque
+credential error naming neither cause. apt's `gh` trails upstream, and this is
+the one tool whose auth flow moves with the service it talks to.
+
+The exact versions in this file were all verified against each project's
+published releases before being written, and every one originally drafted from
+memory was wrong — including a version that had never been released at all.
+`bump-tools.sh` moves them, so the chore is a command rather than a memory.
 
 ### `git/config` and `git/ignore`
 
@@ -339,13 +398,19 @@ carrying a workaround for a problem this machine does not have.
 The credential helper points at the Linux `gh` rather than
 `/opt/homebrew/bin/gh`.
 
-`core.fsmonitor` is not carried on faith. On macOS it is backed by FSEvents; on
-Linux git's fsmonitor daemon uses a different mechanism, and under WSL2 it is
-watching a virtualised ext4 volume. The instruction is to measure it the way the
-Mac repo measured `path_helper`: time `git status` on the largest repo here with
-`core.fsmonitor` on and off, and keep the setting only if the difference is real.
-If it is not, the line is deleted — a setting that buys nothing is not neutral,
-it is a claim nobody checked.
+`core.fsmonitor` is not carried on faith, and neither is `core.untrackedCache`.
+On macOS fsmonitor is backed by FSEvents; on Linux git's own daemon uses a
+different mechanism, and under WSL2 it is watching a virtualised ext4 volume.
+Nothing about the Mac's number transfers.
+
+Both are therefore **absent from `git/config`, with the absence recorded there
+as a pending measurement rather than an oversight.** The measurement itself is
+Step 8 of `docs/runbook-tasks-10-11-build-and-migrate.md`: time `git status` on
+the largest repo here with the setting on and off, once the repositories have
+been migrated and there is a real one to measure. If the difference is real the
+setting goes in with the numbers in its comment; if it is not, it stays out and
+the numbers go in the commit message. Either outcome is a result — a setting
+that buys nothing is not neutral, it is a claim nobody checked.
 
 `git/ignore` drops the macOS block and gains a Linux one. A small Windows block
 stays despite no Windows process working in these repos, because browsing
@@ -363,10 +428,15 @@ machine corrected:
   per token instead of drawing on the subscription.
 - `permissions.deny` — currently absent entirely. Restored with POSIX paths, and
   extended with the Windows host paths reachable from WSL through
-  `/mnt/c/Users/...`. Those do not exist on the Mac and do exist here:
-  `.ssh`, `.aws`, and `gh/hosts.yml` on the host are readable from Ubuntu unless
-  denied. This is practice #15 applied to a machine the Mac's list never
-  described.
+  `/mnt/c/Users/...`. Those do not exist on the Mac and do exist here: the
+  host's SSH, AWS, Azure and gcloud directories, `gh`'s hosts file, the npm
+  configuration, Docker's config, Claude Code's own credentials on the host,
+  `.git-credentials`, and PowerShell's PSReadLine history are all ordinary
+  readable files from inside Ubuntu unless denied. Each is listed twice, once
+  literal and once globbed, because a pattern that silently fails to match reads
+  as protection while providing none. The list was built by enumerating what is
+  on this host's disk, not by adapting a generic one — which is practice #15
+  applied to a machine the Mac's list never described.
 - `model` and `fallbackModel` — currently neither. With one model named and no
   chain, an overload is a stopped session rather than a slower one.
 - `autoUpdatesChannel: "stable"` — currently `latest`.
@@ -408,6 +478,17 @@ would be the one file able to reintroduce CRLF.
 This is practice #13 in a form the Mac repo never needed. There, every machine
 that touches the files is a Unix one, so the question never arises.
 
+Line endings turned out to be the first of a family rather than a one-off.
+Building this repo hit cp1252 decoding on read, UTF-16LE output from both
+`wsl.exe` and `winget.exe`, newline translation on write from Windows-native
+Python, an argument silently rewritten from a Unix path to a Windows one before
+`git.exe` saw it, `ln -s` producing a copy instead of a link under Git Bash, and
+a write that reported success without landing. The README lists them together,
+because the next one will look like none of them individually and like all of
+them collectively. The generalisation: **anything crossing the Windows/Linux
+boundary carries an encoding, a translation or a privilege until something pins
+it.**
+
 ## Checks
 
 Carried unchanged: shellcheck, shfmt, bash syntax, zsh syntax, actionlint,
@@ -430,9 +511,20 @@ plus `winget configure --validate`.
 New, because the boundary is new:
 
 - No file in the repo assumes `/mnt/c`.
-- `configuration.dsc.yaml` and `apt-packages.txt` do not declare the same thing
+- `configuration.winget` and `apt-packages.txt` do not declare the same thing
   twice. A package installed on both sides of the boundary is a boundary that
   has already leaked.
+- The host layer stays thin: every resource in `configuration.winget` belongs to
+  one of its named groups, and the Ubuntu `Script` resource still installs the
+  version it claims to.
+- The terminal opens on the WSL side, and names the same distro the manifest
+  installs.
+- Every action id and keybinding id in the terminal settings resolve to each
+  other. A schema validates two entries that never find one another perfectly
+  happily, and that failure looks fine in review and does nothing on the machine.
+- The Claude Code deny list covers the Windows host and not only Linux, in both
+  the literal and the globbed form of every category.
+- `effortLevel` is absent. An absence has nothing else to defend it.
 - No tracked file contains a CR. `.gitattributes` should make this impossible,
   which is exactly why it is asserted: a rule nobody has watched fail is a rule
   nobody should rely on. Break it on purpose before trusting it.
@@ -443,7 +535,7 @@ Two steps, and only the first is imperative.
 
 ```powershell
 # 1. PowerShell on Windows, once:
-winget configure .\windows\configuration.dsc.yaml
+winget configure .\windows\configuration.winget
 ```
 
 ```bash
@@ -453,8 +545,18 @@ git clone https://github.com/camilopiedra92/workstation ~/workstation
 ```
 
 `winget configure` is idempotent by design. `install.sh` is idempotent by test —
-`check.sh` runs it twice and asserts the second run changes nothing, which is
-the check the Mac repo already has.
+`check.sh` runs `install.sh --links-only` twice and asserts the second run
+changes nothing, which is the check the Mac repo already has.
+
+`--links-only` is not a hedge. The full script installs packages, downloads
+runtimes and edits `/etc/wsl.conf` and the login shell, none of which a
+temporary `HOME` can sandbox, because `sudo` does not care about `$HOME` — and
+the pre-commit hook runs `check.sh` on every commit. What the check actually
+asserts is that the symlinking is idempotent, so the flag makes the code match
+the claim. Gating the check behind an opt-in environment variable was rejected:
+a gated check skips, and under `--strict` a skip is a failure, so the hook would
+fail on every commit. The fix that looks safest is the one that turns the gate
+off.
 
 ## Out of scope
 
@@ -474,5 +576,8 @@ Written down so they are not discovered by accident.
 | When | What |
 |---|---|
 | 2026-10-28 | Node 26 becomes Active LTS. Change `node = "26"` back to `"lts"`. |
-| When gcloud arrives | Add `python = ["3.14", "3.13"]` with the gsutil reasoning. |
+| October 2026 | Python 3.15 ships. The pin moves once the C-extension packages that matter publish wheels for it. |
+| When gcloud arrives | Add the second Python back, with the gsutil reasoning next to it. |
 | When Ghostty ships Windows | Re-evaluate the terminal. Not on its roadmap today. |
+| 2031 | Ubuntu 26.04 leaves support. |
+| No expiry | The font pin moves when a glyph problem makes it move. The vendored schemas move when a key this repo wants appears upstream, or when `drift.sh` reports a divergence that matters. |
