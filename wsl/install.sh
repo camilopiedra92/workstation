@@ -48,7 +48,15 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
   # script inside Linux. The Windows commands this environment actually calls
   # are aliased individually in .zshrc.
   log "Narrowing WSL interop"
-  if ! grep -q 'appendWindowsPath' /etc/wsl.conf 2> /dev/null; then
+  # Anchored to an *uncommented* assignment: a bare `grep -q appendWindowsPath`
+  # also matches `# appendWindowsPath = true` commented out by hand, and would
+  # then report the step already done while interop stayed wide -- exactly the
+  # failure this step exists to prevent.
+  if ! grep -qE '^[[:space:]]*appendWindowsPath' /etc/wsl.conf 2> /dev/null; then
+    # Appends a second [interop] section if one already exists elsewhere in the
+    # file. WSL tolerates duplicate sections in wsl.conf (last one wins) --
+    # accepted here rather than parsed around, since a hand-edited wsl.conf is
+    # rare enough that a merge is not worth the added fragility.
     sudo tee -a /etc/wsl.conf > /dev/null << 'EOF'
 
 [interop]
@@ -64,11 +72,17 @@ EOF
   sudo apt-get install -y $(sed 's/#.*//' "$WSL_DIR/apt-packages.txt" | grep -v '^\s*$')
 
   # --- 3. mise -----------------------------------------------------------------
+  # PATH is widened before the probe below, not after: mise installs into
+  # $HOME/.local/bin, and probing command -v before that directory is on PATH
+  # means a second run never finds an already-installed mise -- and re-runs
+  # curl | sh over the network for a tool that is already there, which is
+  # exactly the "second run changes something" the idempotency check exists to
+  # catch.
+  export PATH="$HOME/.local/bin:$PATH"
   if ! command -v mise > /dev/null 2>&1; then
     log "Installing mise"
     curl -fsSL https://mise.run | sh
   fi
-  export PATH="$HOME/.local/bin:$PATH"
 fi
 
 # --- 4. Symlinks --------------------------------------------------------------
@@ -159,8 +173,16 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
   # --- 8. Python CLIs -----------------------------------------------------------
   # uv tool has no manifest of its own, which is why uv-tools.txt exists.
   log "Installing Python CLIs with uv"
-  while read -r line; do
-    line=${line%%#*}
+  # Read from fd 3, not stdin: a command inside this loop that ever reads
+  # stdin (uv tool install does not today) would otherwise consume the rest of
+  # uv-tools.txt instead of whatever it meant to read.
+  while read -r -u 3 line; do
+    # Strip only a comment that begins a field -- preceded by whitespace or at
+    # line start -- not a bare `#` fused onto a token. pip/uv VCS references
+    # commonly carry #egg= or #subdirectory= fragments, and truncating at any
+    # `#` would silently install a different, valid-looking ref instead of
+    # failing loud.
+    line=$(printf '%s' "$line" | sed -E 's/(^|[[:space:]])#.*$//')
     [ -z "${line// /}" ] && continue
     read -r name ref <<< "$line"
     if uv tool list 2> /dev/null | grep -q "^$name "; then
@@ -169,7 +191,7 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
       echo "    installing $name from $ref"
       uv tool install "$ref"
     fi
-  done < "$WSL_DIR/uv-tools.txt"
+  done 3< "$WSL_DIR/uv-tools.txt"
 
   # --- 9. Claude Code settings ---------------------------------------------------
   # Merged with jq rather than linked, because Claude Code rewrites this file on
@@ -200,9 +222,21 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
   fi
 
   # --- 11. Login shell -----------------------------------------------------------
-  if [ "$SHELL" != "$(command -v zsh)" ]; then
+  # Tests the account's actual shell in /etc/passwd rather than $SHELL: $SHELL
+  # is assigned once at session start and does not update within a running
+  # shell, so comparing against it would re-run chsh -- and re-prompt for sudo
+  # -- on a second run in the same terminal, even after the change already
+  # landed.
+  #
+  # ${USER:-$(id -un)} rather than a bare $USER: under set -u, USER is the one
+  # variable bash does not assign for you when it is unset, unlike SHELL --
+  # verified. An environment that never exported it (a cron job, some CI
+  # shells) would otherwise abort the script on its very last step, naming a
+  # variable rather than the missing export. id -un asks the account directly.
+  target_user="${USER:-$(id -un)}"
+  if [ "$(getent passwd "$target_user" | cut -d: -f7)" != "$(command -v zsh)" ]; then
     log "Setting zsh as the login shell"
-    sudo chsh -s "$(command -v zsh)" "$USER"
+    sudo chsh -s "$(command -v zsh)" "$target_user"
   fi
 
   # --- 12. VS Code remote settings -----------------------------------------------
