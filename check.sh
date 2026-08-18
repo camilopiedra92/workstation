@@ -130,18 +130,20 @@ check "english only" english_only
 
 # --- Shell -------------------------------------------------------------------
 if have shellcheck; then
-  check "shellcheck" shellcheck -x ./*.sh ./githooks/* ./wsl/claude/*.sh
+  check "shellcheck" shellcheck -x ./*.sh ./githooks/* ./wsl/claude/*.sh ./wsl/install.sh
 else
   skip "shellcheck" "not installed"
 fi
 
 if have shfmt; then
-  check "shfmt" shfmt -d ./*.sh ./githooks/* ./wsl/claude/*.sh
+  check "shfmt" shfmt -d ./*.sh ./githooks/* ./wsl/claude/*.sh ./wsl/install.sh
 else
   skip "shfmt" "not installed"
 fi
 
-syntax_bash() { for f in ./*.sh ./githooks/* ./wsl/claude/*.sh; do bash -n "$f" || return 1; done; }
+syntax_bash() {
+  for f in ./*.sh ./githooks/* ./wsl/claude/*.sh ./wsl/install.sh; do bash -n "$f" || return 1; done
+}
 check "bash syntax" syntax_bash
 
 # --- Windows layer -----------------------------------------------------------
@@ -657,6 +659,58 @@ subagent_rows() {
     }
 }
 check "subagent rows are valid jsonl with the agent name" subagent_rows
+
+# --- install.sh is idempotent -------------------------------------------------
+# Adapted from the Mac's install_is_idempotent, with every path pointed at
+# wsl/install.sh instead. Runs the script against a temporary HOME, then runs
+# it again, and asserts the second run backs up nothing -- the signal that
+# link() found every destination already correct.
+#
+# apt-get, mise and a real network are not simulated -- there is no dry-run
+# flag -- so this needs an actual Ubuntu with sudo, which this repo's own
+# commit machine is not. Where it is not available, this check is deferred:
+# see docs/runbook-tasks-10-11-build-and-migrate.md, which is where a human
+# first sees it run to completion.
+install_is_idempotent() {
+  local tmphome first second status=0
+  tmphome=$(mktemp -d)
+
+  first=$(HOME="$tmphome" \
+    XDG_CONFIG_HOME="$tmphome/.config" \
+    XDG_DATA_HOME="$tmphome/.local/share" \
+    XDG_STATE_HOME="$tmphome/.local/state" \
+    ./wsl/install.sh 2>&1) || {
+    echo "first run failed:"
+    echo "$first"
+    rm -rf "$tmphome"
+    return 1
+  }
+
+  second=$(HOME="$tmphome" \
+    XDG_CONFIG_HOME="$tmphome/.config" \
+    XDG_DATA_HOME="$tmphome/.local/share" \
+    XDG_STATE_HOME="$tmphome/.local/state" \
+    ./wsl/install.sh 2>&1) || {
+    echo "second run failed:"
+    echo "$second"
+    rm -rf "$tmphome"
+    return 1
+  }
+
+  if echo "$second" | grep -q 'backed up:'; then
+    echo "second run backed up a file -- linking is not idempotent"
+    echo "$second"
+    status=1
+  fi
+
+  rm -rf "$tmphome"
+  return "$status"
+}
+if have apt-get && have sudo; then
+  check "install.sh is idempotent" install_is_idempotent
+else
+  skip "install.sh is idempotent" "needs apt-get and sudo (a real Ubuntu host)"
+fi
 
 # --- Summary -----------------------------------------------------------------
 echo

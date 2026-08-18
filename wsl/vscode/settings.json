@@ -1,0 +1,73 @@
+{
+  // VS Code, Remote-WSL machine scope. Applied to
+  // ~/.vscode-server/data/Machine/settings.json.
+  //
+  // This half needs the toolchain: formatters, linters, the Python interpreter.
+  // The half that needs the local renderer -- fonts, theme, window -- is in
+  // windows/vscode/settings.json. A setting on the wrong side of that line
+  // silently does nothing, which is the whole reason for the split.
+
+  "editor.formatOnSave": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.linkedEditing": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  // ---------- Python ----------
+  // Ruff (by Astral, the uv people): linter and formatter in one binary.
+  // Replaces black + isort + flake8 and is roughly 100x faster.
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  // "standard" reports real type errors without the noise of "strict"
+  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.autoImportCompletions": true,
+  // mise resolves the interpreter from each project's mise.toml
+  "python.terminal.activateEnvironment": true,
+
+  // ---------- JavaScript / TypeScript ----------
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[html]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[markdown]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+  // Use the project's TypeScript, not the one VS Code ships: keeps the editor
+  // and CI from reporting different errors.
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+
+  // ---------- Terminal ----------
+  // Inherits the shell PATH, so mise activates the right version per project.
+  "terminal.integrated.inheritEnv": true,
+
+  // ---------- Git ----------
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  // pull.rebase=true is already in ~/.config/git/config; this aligns the UI.
+  "git.enableSmartCommit": true,
+
+  // ---------- Noise ----------
+  "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+  "files.exclude": {
+    "**/.venv": true,
+    "**/__pycache__": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true,
+    "**/node_modules": true
+  },
+
+  // ---------- Claude Code ----------
+  // The panel, not the sidebar: it keeps the full editor width for code.
+  "claudeCode.preferredLocation": "panel"
+}
