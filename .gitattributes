@@ -1,0 +1,23 @@
+# This repo is authored on Windows and consumed on Linux. That direction is the
+# whole reason this file exists.
+#
+# Git for Windows ships core.autocrlf=true in its system gitconfig
+# (C:/Program Files/Git/etc/gitconfig), which converts on the way in and out
+# using a heuristic about what counts as text. The heuristic is usually right,
+# and "usually right" is not a property a shell script can rely on: a .sh that
+# reaches Ubuntu with CRLF fails at the shebang with
+#   bad interpreter: /usr/bin/env bash^M
+# which names neither the file nor the real cause.
+#
+# Declaring it here removes the machine from the answer. The repo stores LF and
+# checks out LF everywhere, whatever any clone has autocrlf set to.
+* text=auto eol=lf
+
+# .ps1 is included in the rule above on purpose rather than exempted: both
+# Windows PowerShell 5.1 and PowerShell 7 read LF scripts without complaint,
+# and an exemption here would be the one file able to reintroduce CRLF.
+
+# Binary, so no conversion is attempted and no diff is produced.
+*.png binary
+*.zip binary
+*.ttf binary
