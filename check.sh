@@ -534,7 +534,7 @@ no_macos_in_ignore() {
 check "git/ignore carries no macOS entries" no_macos_in_ignore
 
 # --- Claude Code -------------------------------------------------------------
-check "claude settings" python3 -c "import json; json.load(open('wsl/claude/settings.json'))"
+check "claude settings" python3 -c "import json; json.load(open('wsl/claude/settings.json', encoding='utf-8'))"
 
 # The Windows host's credential stores are readable from inside WSL. They are
 # not on the Mac, because there is no host. This asserts every category is
@@ -545,7 +545,7 @@ check "claude settings" python3 -c "import json; json.load(open('wsl/claude/sett
 deny_covers_the_host() {
   python3 - << 'PY'
 import json, sys
-deny = json.load(open('wsl/claude/settings.json'))['permissions']['deny']
+deny = json.load(open('wsl/claude/settings.json', encoding='utf-8'))['permissions']['deny']
 
 # One template per category, both forms built from it, so a tenth category is
 # one line and cannot arrive with only one of its two forms.
@@ -579,7 +579,7 @@ check "the deny list covers the Windows host, not just Linux" deny_covers_the_ho
 no_effort_level() {
   python3 -c "
 import json, sys
-s = json.load(open('wsl/claude/settings.json'))
+s = json.load(open('wsl/claude/settings.json', encoding='utf-8'))
 sys.exit(1 if 'effortLevel' in s else 0)
 " || {
     echo "effortLevel is set; it freezes a default that improves on its own"
