@@ -57,6 +57,29 @@ Write-Step 'Applying the host configuration'
 winget configure $manifest --accept-configuration-agreements
 Assert-WingetSuccess 'winget configure'
 
+# VS Code's user settings, copied rather than linked. VS Code rewrites this file
+# whenever a setting changes through the UI, so a symlink would be replaced by a
+# regular file the first time the theme moved -- the same reason Windows
+# Terminal's settings and Claude Code's are copied and merged rather than linked.
+#
+# The repo's values win. Anything VS Code has added that the repo does not
+# mention is lost, which is the tradeoff a copy makes and a merge would not; it
+# is acceptable here because this file declares appearance and telemetry, not
+# state worth preserving.
+#
+# Copy-Item is a cmdlet, not a native binary -- $ErrorActionPreference = 'Stop'
+# already turns a failure here into a terminating error, so this call is not
+# followed by Assert-WingetSuccess like the winget calls above. Said here
+# explicitly so an unasserted call does not read like an oversight.
+Write-Step 'Deploying VS Code user settings'
+$codeUser = Join-Path $env:APPDATA 'Code\User'
+if (Test-Path $codeUser) {
+    Copy-Item (Join-Path $PSScriptRoot 'vscode\settings.json') (Join-Path $codeUser 'settings.json') -Force
+    Write-Host "    $codeUser\settings.json"
+} else {
+    Write-Host "    VS Code has not been launched yet -- open it once, then re-run this script" -ForegroundColor Yellow
+}
+
 Write-Step 'Host layer applied.'
 Write-Host ''
 Write-Host 'Next, inside Ubuntu:' -ForegroundColor Yellow

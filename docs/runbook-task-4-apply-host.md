@@ -179,6 +179,23 @@ runtime, the same way Claude Code owns its own `settings.json`.
 
 ---
 
+## Step 5b — Confirm the VS Code settings landed
+
+Unlike the terminal, `bootstrap.ps1` already deployed this one — it copies
+`windows\vscode\settings.json` to `%APPDATA%\Code\User\settings.json` right after
+`winget configure` finishes. This step is the verification, not the deployment:
+
+```powershell
+Select-String -Path "$env:APPDATA\Code\User\settings.json" -Pattern "JetBrainsMono Nerd Font" | Measure-Object | Select-Object Count
+```
+
+Expected: `1` or more. **`0` means VS Code had not been launched when
+`bootstrap.ps1` ran** — the copy step skips silently rather than failing when
+`%APPDATA%\Code\User` does not exist yet, so this check is what catches that.
+Open VS Code once, close it, then re-run `.\windows\bootstrap.ps1`.
+
+---
+
 ## Step 6 — Look at it
 
 Open Windows Terminal. Four things to check by eye:
