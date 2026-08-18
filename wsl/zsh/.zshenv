@@ -42,7 +42,31 @@ path=(
 )
 export PATH
 
-export EDITOR="code --wait"
+# code(1) reaches WSL two ways and neither is guaranteed. VS Code's Remote-WSL
+# server puts it on PATH inside its own integrated terminal; outside that, it
+# resolved only through the Windows PATH -- which install.sh removes on
+# purpose (asserted further down in this file), because every file under
+# /mnt/c is executable as far as Linux is concerned.
+#
+# Measured before writing this: with interop on, `command -v code` returned a
+# /mnt/c path. With it off, nothing.
+#
+# So this picks what is actually there. It matters more than an editor
+# preference: git/config sets commit.verbose = true, which makes the editor the
+# intended path for every commit without -m -- and an EDITOR that does not
+# resolve fails with a message naming neither the editor nor the interop
+# setting.
+#
+# Set here rather than in .zshrc: this file is read by every zsh, including
+# non-interactive ones, which is where git's editor lookup actually happens.
+# vim over nano as the fallback -- it is what git itself falls back to when
+# EDITOR is unset at all, so a missing code is the same experience as a bare
+# git install.
+if command -v code > /dev/null 2>&1; then
+  export EDITOR="code --wait"
+else
+  export EDITOR="vim"
+fi
 export VISUAL="$EDITOR"
 
 # Windows interop puts the entire Windows PATH into every WSL shell, which is

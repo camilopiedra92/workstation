@@ -123,8 +123,8 @@ alias explorer='explorer.exe'
 alias clip='clip.exe'
 
 # ---------- Editor ----------
-export EDITOR="code --wait"
-export VISUAL="$EDITOR"
+# Set in .zshenv, not here: git's editor lookup happens in non-interactive
+# shells too (hooks, `zsh -c`), which read .zshenv but never this file.
 
 # ---------- Claude Code ----------
 alias c='claude'
