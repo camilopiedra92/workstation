@@ -4,11 +4,14 @@
 # Brewfile and it is not a compromise: WinGet Configuration is declarative,
 # idempotent, official, and applied with one command.
 #
-# It declares four kinds of thing and nothing else: the subsystem, a terminal, a
-# font, an editor. Everything here exists to make the WSL layer reachable,
-# visible or typeable. The moment something that is not one of those four wants
-# to be installed on the host, that is the signal the boundary is being crossed
-# for a bad reason.
+# It declares five kinds of thing and nothing else. Four make the WSL layer
+# reachable, visible or typeable: the subsystem, a terminal, a font, an editor.
+# The fifth is the tools needed to author this repo -- shellcheck, shfmt and
+# taplo -- which are a different job from running the environment, and are kept
+# in their own group so the first list cannot quietly absorb them.
+#
+# The moment something belongs to neither job, that is the signal the boundary
+# is being crossed for a bad reason. check.sh holds both lists.
 #
 # Naming: Microsoft's convention is ./.config/configuration.winget. The
 # extension is kept, because that is what carries the schema association. The
@@ -81,6 +84,19 @@ properties:
           $env:WSL_UTF8 = 1
           wsl.exe --install -d Ubuntu-26.04 --no-launch
 
+    # ---- The environment ----
+    # Deliberately unpinned, and the reason is not laziness. All four update
+    # themselves out of band -- through the Store and their own in-app updaters
+    # -- so a `version` here would describe a state the machine contradicts
+    # within days, and the manifest would be documenting a fiction.
+    #
+    # Worse if it were honoured: it would hold back security updates on the two
+    # largest attack surfaces here, a browser-grade editor and a terminal.
+    #
+    # The two groups that ARE pinned are the ones that stay put: the authoring
+    # tools, whose whole purpose is version parity with CI, and the font, which
+    # does not self-update and whose version moves glyph metrics.
+
     # ---- The terminal ----
     # Replaces Ghostty, which does not run on Windows and is not on its roadmap.
     # The machine currently has 1.18.10301, several versions behind.
@@ -98,6 +114,10 @@ properties:
     # installed is not better than one: when something falls back, or a family
     # name is misspelled, a second Nerd Font lets it resolve to the wrong one and
     # still work, with glyphs that look subtly different and no way to tell why.
+    #
+    # Pinned because, unlike the three below it, nothing here self-updates it.
+    # No expiry: it moves when a glyph problem makes it move, or deliberately,
+    # not on a schedule.
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: font
       directives:
@@ -106,6 +126,7 @@ properties:
       settings:
         id: DEVCOM.JetBrainsMonoNerdFont
         source: winget
+        version: "3.3.0"
 
     # ---- The editor ----
     # Installed on the host and used against WSL through Remote-WSL. That is the
@@ -141,6 +162,10 @@ properties:
     # They are a separate group from the four above on purpose. The host layer
     # declares what makes the WSL layer reachable; this is a different job. One
     # undifferentiated list is how a thin layer stops being thin.
+    #
+    # These three versions are the CI pins. They move together or they stop
+    # meaning anything, so bump-tools.sh (Task 14) moves both in one pass --
+    # never one by hand.
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: shellcheck
       directives:
@@ -148,6 +173,7 @@ properties:
       settings:
         id: koalaman.shellcheck
         source: winget
+        version: "0.11.0"
 
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: shfmt
@@ -156,6 +182,7 @@ properties:
       settings:
         id: mvdan.shfmt
         source: winget
+        version: "3.13.1"
 
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: taplo
@@ -164,5 +191,6 @@ properties:
       settings:
         id: tamasfe.taplo
         source: winget
+        version: "0.10.0"
 
   configurationVersion: 0.2.0
