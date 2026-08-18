@@ -85,17 +85,21 @@ properties:
           wsl.exe --install -d Ubuntu-26.04 --no-launch
 
     # ---- The environment ----
-    # Deliberately unpinned, and the reason is not laziness. All four update
-    # themselves out of band -- through the Store and their own in-app updaters
-    # -- so a `version` here would describe a state the machine contradicts
-    # within days, and the manifest would be documenting a fiction.
+    # Windows Terminal, VS Code and PowerToys are deliberately unpinned, and the
+    # reason is not laziness: each updates itself out of band, through the Store
+    # or its own in-app updater. A `version` here would describe a state the
+    # machine contradicts within days, so the manifest would be documenting a
+    # fiction. And if the pin were honoured it would hold back security updates
+    # on the two largest attack surfaces here -- a browser-grade editor and a
+    # terminal. Microsoft.WSL, above, is unpinned for the same reason.
     #
-    # Worse if it were honoured: it would hold back security updates on the two
-    # largest attack surfaces here, a browser-grade editor and a terminal.
+    # The font is the exception in this group, and it is pinned. Nothing updates
+    # it, and its version moves glyph metrics -- which this repo already cares
+    # about enough to give a dedicated coherence check.
     #
-    # The two groups that ARE pinned are the ones that stay put: the authoring
-    # tools, whose whole purpose is version parity with CI, and the font, which
-    # does not self-update and whose version moves glyph metrics.
+    # The rule rather than a tally: pin what stays put, leave what moves on its
+    # own. Counts in comments go stale, and this file has already had one -- it
+    # said "four kinds of thing" while declaring five.
 
     # ---- The terminal ----
     # Replaces Ghostty, which does not run on Windows and is not on its roadmap.
@@ -115,9 +119,8 @@ properties:
     # name is misspelled, a second Nerd Font lets it resolve to the wrong one and
     # still work, with glyphs that look subtly different and no way to tell why.
     #
-    # Pinned because, unlike the three below it, nothing here self-updates it.
-    # No expiry: it moves when a glyph problem makes it move, or deliberately,
-    # not on a schedule.
+    # Pinned because nothing updates this font on its own. No expiry: it moves
+    # when a glyph problem makes it move, or deliberately, not on a schedule.
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: font
       directives:
@@ -159,11 +162,12 @@ properties:
     # the same versions -- so host and CI reach the same verdict on the same
     # file, which is the only way a green tick means anything.
     #
-    # They are a separate group from the four above on purpose. The host layer
-    # declares what makes the WSL layer reachable; this is a different job. One
-    # undifferentiated list is how a thin layer stops being thin.
+    # They are a separate group from the substrate and environment above, on
+    # purpose. The host layer declares what makes the WSL layer reachable; this
+    # is a different job. One undifferentiated list is how a thin layer stops
+    # being thin.
     #
-    # These three versions are the CI pins. They move together or they stop
+    # The versions below are the CI pins. They move together or they stop
     # meaning anything, so bump-tools.sh (Task 14) moves both in one pass --
     # never one by hand.
     - resource: Microsoft.WinGet.DSC/WinGetPackage
