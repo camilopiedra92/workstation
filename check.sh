@@ -209,7 +209,7 @@ GROUPS = {
     'substrate': {'Microsoft.WSL'},
     'environment': {'Microsoft.WindowsTerminal', 'DEVCOM.JetBrainsMonoNerdFont',
                      'Microsoft.VisualStudioCode', 'Microsoft.PowerToys'},
-    'authoring': {'koalaman.shellcheck', 'mvdan.shfmt', 'tamasfe.taplo'},
+    'authoring': {'rhysd.actionlint', 'koalaman.shellcheck', 'mvdan.shfmt', 'tamasfe.taplo'},
 }
 allowed = set().union(*GROUPS.values())
 
@@ -568,7 +568,8 @@ def ci(var):
 problems = []
 for tool, pkg, var in (('shellcheck', 'koalaman.shellcheck', 'SHELLCHECK_VERSION'),
                        ('shfmt', 'mvdan.shfmt', 'SHFMT_VERSION'),
-                       ('taplo', 'tamasfe.taplo', 'TAPLO_VERSION')):
+                       ('taplo', 'tamasfe.taplo', 'TAPLO_VERSION'),
+                       ('actionlint', 'rhysd.actionlint', 'ACTIONLINT_VERSION')):
     got = {'mise': mise(tool), 'winget': winget(pkg), 'ci': ci(var)}
     if None in got.values():
         problems.append('%s: could not read a version from every file: %s' % (tool, got))

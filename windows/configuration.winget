@@ -10,9 +10,9 @@
 # subsystem itself, a terminal, a font, an editor, and PowerToys for the
 # keyboard remapping that carries Mac habits across.
 #
-# The second is authoring this repository: shellcheck, shfmt and taplo. That is
-# a different job from running the environment, and they are kept in their own
-# group so the first list cannot quietly absorb them.
+# The second is authoring this repository: actionlint, shellcheck, shfmt and
+# taplo. That is a different job from running the environment, and they are
+# kept in their own group so the first list cannot quietly absorb them.
 #
 # The moment something belongs to neither job, that is the signal the boundary
 # is being crossed for a bad reason. check.sh holds both lists.
@@ -196,6 +196,15 @@ properties:
     # The versions below are the CI pins. They move together or they stop
     # meaning anything, so bump-tools.sh (Task 14) moves both in one pass --
     # never one by hand.
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: actionlint
+      directives:
+        description: Install actionlint (matches the CI pin, 1.7.12)
+      settings:
+        id: rhysd.actionlint
+        source: winget
+        version: "1.7.12"
+
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: shellcheck
       directives:

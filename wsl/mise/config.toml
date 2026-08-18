@@ -88,9 +88,17 @@ fastfetch = "2.67.1" # wsl/zsh/.zshrc's greeting; undeclared, it is command-not-
 # The checks' own tools. check.sh runs them, the pre-commit hook runs check.sh,
 # and under --strict a missing tool is a FAIL rather than a skip -- so without
 # these, install.sh finishes and then every commit in this repo is blocked.
+# actionlint is here for the same reason the other three are: check.sh calls
+# it directly (guarded by `have actionlint`), and a tool a check depends on
+# is a WSL dependency the moment that check can run in WSL, whatever else
+# also declares it.
 #
 # Same versions windows/configuration.winget pins for the host and .github/
-# pins for CI. All three must agree or the same file gets three verdicts.
+# pins for CI. These must agree, or the same file gets a different verdict
+# depending on where it was checked -- linter_versions_agree in check.sh
+# asserts it directly rather than trusting every pin here to stay in step by
+# hand.
+actionlint = "1.7.12"
 shellcheck = "0.11.0"
 shfmt = "3.13.1"
 taplo = "0.10.0"

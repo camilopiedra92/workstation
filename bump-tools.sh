@@ -9,12 +9,15 @@
 #   CI tools (shellcheck, shfmt, actionlint, taplo): a version in
 #   .github/workflows/ci.yml's env vars, the same version restated in that
 #   file's "Tools are the pinned versions" step, a checksum in
-#   .github/tool-checksums.txt, and -- for the three of them the host and WSL
-#   also run -- a matching version in windows/configuration.winget and in
+#   .github/tool-checksums.txt, and -- the host and WSL run every one of
+#   these too -- a matching version in windows/configuration.winget and in
 #   wsl/mise/config.toml. They move together in the same pass, or the file
 #   they lint gets a different verdict depending on which of the three ran
 #   it -- check.sh's "the linter versions agree across all three manifests"
-#   is what asserts that never happens quietly.
+#   is what asserts that never happens quietly. The host-and-WSL mirror below
+#   applies to the whole CI_TOOLS list rather than naming a subset of it: a
+#   subset is a second list that needs updating in step with the first, which
+#   is exactly the shape of gap that let this drift in the first place.
 #
 #   The mise pins in wsl/mise/config.toml: the user tools, plus gh. There is
 #   no checksum for these, so the pass is simpler -- read the latest release,
@@ -193,29 +196,27 @@ for tool in $CI_TOOLS; do
   mv "$tmp/checksums" "$CI_CHECKSUMS"
   mv "$tmp/workflow" "$CI_WORKFLOW"
 
-  # windows/configuration.winget pins the three of these it also runs on the
-  # host (not actionlint, which the host never does) to the identical
-  # version, in its own version field and in that resource's description, and
-  # wsl/mise/config.toml pins the same three for WSL. Move both in the same
-  # pass or the host, CI and WSL silently stop agreeing on what a clean file
-  # looks like.
-  case "$tool" in
-    shellcheck | shfmt | taplo)
-      awk -v id="      id: $tool" -v have="$have" -v want="$want" '
-        /^    - resource:/ { in_block = 0 }
-        $0 == id { in_block = 1 }
-        in_block { gsub(have, want) }
-        { print }
-      ' "$HOST_MANIFEST" > "$tmp/manifest"
-      mv "$tmp/manifest" "$HOST_MANIFEST"
+  # windows/configuration.winget pins every one of CI_TOOLS the host also
+  # runs, to the identical version, in its own version field and in that
+  # resource's description, and wsl/mise/config.toml pins the same set for
+  # WSL. Move both in the same pass or the host, CI and WSL silently stop
+  # agreeing on what a clean file looks like. Unconditional across CI_TOOLS
+  # rather than a named subset -- see the header: a subset here is a second
+  # list to keep in step with the first, which is what let this drift once
+  # already.
+  awk -v id="      id: $tool" -v have="$have" -v want="$want" '
+    /^    - resource:/ { in_block = 0 }
+    $0 == id { in_block = 1 }
+    in_block { gsub(have, want) }
+    { print }
+  ' "$HOST_MANIFEST" > "$tmp/manifest"
+  mv "$tmp/manifest" "$HOST_MANIFEST"
 
-      # Same rewrite the mise-pins loop below uses: only the quoted version
-      # moves, the trailing comment (none of these three carry one) is
-      # carried through unchanged either way.
-      sed -E "s|^($tool = \")[^\"]*(\".*)\$|\1$want\2|" "$MISE_CONFIG" > "$tmp/mise"
-      mv "$tmp/mise" "$MISE_CONFIG"
-      ;;
-  esac
+  # Same rewrite the mise-pins loop below uses: only the quoted version
+  # moves, whatever comment follows (none of CI_TOOLS carries one today) is
+  # carried through unchanged either way.
+  sed -E "s|^($tool = \")[^\"]*(\".*)\$|\1$want\2|" "$MISE_CONFIG" > "$tmp/mise"
+  mv "$tmp/mise" "$MISE_CONFIG"
 
   printf '  %s%s%s %s -> %s%s%s\n' "$BOLD" "$tool" "$OFF" "$have" "$GREEN" "$want" "$OFF"
   changed=1
