@@ -536,15 +536,35 @@ check "git/ignore carries no macOS entries" no_macos_in_ignore
 # --- Claude Code -------------------------------------------------------------
 check "claude settings" python3 -c "import json; json.load(open('wsl/claude/settings.json'))"
 
-# The host's credential stores are readable from inside WSL. They are not on the
-# Mac, because there is no host. Denying ~/.ssh while leaving the Windows one
-# readable protects the key and hands over the one beside it.
+# The Windows host's credential stores are readable from inside WSL. They are
+# not on the Mac, because there is no host. This asserts every category is
+# denied in BOTH forms: the glob is the rule, the literal is the guarantee. A
+# pattern that silently fails to match is worse than no pattern -- it reads as
+# protection while providing none, and this list is exercised for the first
+# time by a human, by hand, in Task 12.
 deny_covers_the_host() {
   python3 - << 'PY'
 import json, sys
 deny = json.load(open('wsl/claude/settings.json'))['permissions']['deny']
-need = ['/mnt/c/Users/*/.ssh/**', '/mnt/c/Users/*/.aws/**',
-        '/mnt/c/Users/*/AppData/Roaming/gh/hosts.yml']
+
+# One template per category, both forms built from it, so a tenth category is
+# one line and cannot arrive with only one of its two forms.
+templates = [
+    '/mnt/c/Users/{}/.ssh/**',
+    '/mnt/c/Users/{}/.aws/**',
+    '/mnt/c/Users/{}/.docker/config.json',
+    '/mnt/c/Users/{}/.git-credentials',
+    '/mnt/c/Users/{}/.claude/.credentials.json',
+    '/mnt/c/Users/{}/AppData/Roaming/gh/hosts.yml',
+    '/mnt/c/Users/{}/AppData/Roaming/npm/**',
+    '/mnt/c/Users/{}/AppData/Roaming/gcloud/**',
+    '/mnt/c/Users/{}/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt',
+]
+need = []
+for t in templates:
+    need.append(t.format('camilo.piedrahita'))
+    need.append(t.format('*'))
+
 missing = [n for n in need if 'Read(%s)' % n not in deny]
 if missing:
     print('deny does not cover the Windows host: %s' % ', '.join(missing))
