@@ -486,7 +486,8 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 # caught it. 'mnt/c' matches the same lines and is not rewritten, on either
 # platform.
 #
-# Three exclusions, three different reasons:
+# Each exclusion below has its own reason. They are not interchangeable, and a
+# new one needs its own justification rather than being added by analogy:
 #   ':!*.md'          markdown is prose. This check guards config and code,
 #                     where an assumption is executed rather than described.
 #   ':!check.sh'      this file necessarily contains the pattern it searches for.
