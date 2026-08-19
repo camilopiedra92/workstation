@@ -5,9 +5,9 @@
 # Claude runs this before every Bash tool call, passing the pending call as
 # JSON on stdin. Exit 0 lets the command run; exit 2 blocks it and feeds
 # stderr back to the model as the reason. A prompted rule is advisory and its
-# compliance decays as a session grows; this does not. The mechanism backs the
-# prose rules in CLAUDE.md today; the prose contracts to a pointer in a
-# follow-up change. See docs/decisions.md R43.
+# compliance decays as a session grows; this does not. The mechanism IS the
+# rule; CLAUDE.md's Windows-boundary section points here rather than restating
+# it. See docs/decisions.md R43.
 #
 # What it blocks, and why:
 #

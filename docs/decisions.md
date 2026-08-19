@@ -1174,3 +1174,19 @@ Cost if wrong: a future reader treats the single-writer exception as licence
 and fans out writers without the written partition -- the failure the
 absolute rule guarded against. The skill's wording makes the partition page
 the precondition, and the default remains one writer.
+
+R43/R44 -- the contraction landed. CLAUDE.md went from 253 lines of prose to
+128 (about 105 after the HTML comments are stripped at injection): machine
+facts, rules with a command or threshold attached, and pointers to the four
+skills and the guard. Three additions the research asked for and the old
+file lacked: the verification loop as a first-class section (a runnable
+check per task, evidence over claims, implementer-greened tests as weak
+evidence), session hygiene (two failed corrections means a fresh session;
+scope or delegate investigations), and an audit stamp dating the file's
+assumptions with a re-audit due by 2027-02. One correction of record: small
+review units are justified by detection quality, not review speed -- size
+barely correlates with latency, and the old justification quietly claimed
+otherwise. The PR #10 re-review's acceptance criteria for this change --
+batch-small, vertical slices with a contract test on the seam, and
+spec-vs-plan dates all surviving the contraction -- are each in the
+contracted file.
