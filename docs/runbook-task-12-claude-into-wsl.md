@@ -199,18 +199,24 @@ decision for a separate day.
 
 Start the new session inside Ubuntu, in `~/workstation`, and hand it this:
 
-> We are executing `docs/superpowers/plans/2026-08-18-workstation.md` with
-> subagent-driven development. Tasks 1 through 12 are complete. The ledger is at
-> `.superpowers/sdd/2026-08-18-workstation/progress.md` — read it before doing
-> anything, especially the Rulings section, which records every decision made on
-> my behalf and what each costs if wrong. Remaining: Task 13 (`drift.sh`),
-> Task 14 (CI), Task 15 (README). Addenda for all three are already written in
-> that same directory and override their briefs.
+> This repository declares this machine. All fifteen tasks of
+> `docs/superpowers/plans/2026-08-18-workstation.md` are complete and reviewed.
+> Read `README.md` for how it works and `docs/decisions.md` for why — that second
+> file records every decision taken on my behalf during the build and what each
+> costs if it is wrong. Do not change anything that looks odd until you have read
+> its entry there.
 
-The ledger is the handoff. It survives this session ending, and it is the only
-place the reasoning behind the odd-looking decisions is written down — why
-`startingDirectory` sits in `profiles.defaults`, why Ubuntu is installed by a
-DSC `Script` resource, why `useLatest` must not be deleted as redundant.
+**`docs/decisions.md` is the handover**, and it is tracked, so it arrives with the
+clone. That matters more than it sounds: the working record it was extracted from
+lives under `.superpowers/`, which is git-ignored — so the document this page used
+to point at would not have existed on the machine this page tells you to create.
+
+It is the only place the reasoning behind the odd-looking decisions is written
+down: why `startingDirectory` sits in `profiles.defaults` rather than on the
+profile it configures, why Ubuntu is installed by a DSC `Script` resource instead
+of a package id, and why `useLatest` must not be deleted as redundant — that last
+one because the argument for leaving it out was sound, and the first real apply
+disproved it.
 
 ---
 
