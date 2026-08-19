@@ -100,6 +100,33 @@ skip() { # skip <name> <reason>
 
 have() { command -v "$1" > /dev/null 2>&1; }
 
+# --- Which python3 -----------------------------------------------------------
+# Resolved by capability, not by name. The YAML and JSON Schema checks below
+# need pyyaml and jsonschema. In WSL those arrive from apt, as python3-yaml and
+# python3-jsonschema, and apt installs them against /usr/bin/python3 -- but mise
+# puts its own python3 shim ahead of that on PATH, and mise's interpreter has
+# neither library. A bare `python3` therefore resolves to the one interpreter
+# that cannot do the work, and five checks degrade to skip on a machine where
+# every dependency is present and correctly declared.
+#
+# That was measured on this laptop, not predicted. R15 and R23 approved the apt
+# packages after confirming they "do not collide" with mise's python; they do
+# coexist, but the failure mode runs the other way -- the shim shadows the
+# interpreter the libraries were installed for. The manifests were right and the
+# checks were wrong about them, which is the same shape as every other defect
+# this repo found in its own checks.
+#
+# So take the first python3 that can import yaml. On CI that is the one on PATH,
+# where pyyaml arrives by pip; in WSL it is /usr/bin/python3. If neither can,
+# this stays on PATH's python3 so the skips still name the interpreter a reader
+# would go looking for.
+PYTHON=python3
+if ! "$PYTHON" -c "import yaml" > /dev/null 2>&1; then
+  if /usr/bin/python3 -c "import yaml" > /dev/null 2>&1; then
+    PYTHON=/usr/bin/python3
+  fi
+fi
+
 # --- No carriage returns in tracked files ------------------------------------
 # .gitattributes should make this impossible, which is exactly why it is
 # asserted. A rule nobody has watched fail is a rule nobody should rely on.
@@ -168,10 +195,10 @@ check "bash syntax" syntax_bash
 # inside it resolve is a different question, and one only a Windows machine with
 # winget can answer -- so it lives in the second CI job, not here. See practice
 # #8: out of a runner goes what that runner cannot answer honestly.
-have_pyyaml() { python3 -c "import yaml" > /dev/null 2>&1; }
+have_pyyaml() { "$PYTHON" -c "import yaml" > /dev/null 2>&1; }
 
-if have python3 && have_pyyaml; then
-  check "winget manifest is valid yaml" python3 -c "
+if have "$PYTHON" && have_pyyaml; then
+  check "winget manifest is valid yaml" "$PYTHON" -c "
 import sys, yaml
 yaml.safe_load(open('windows/configuration.winget', encoding='utf-8'))
 "
@@ -184,9 +211,9 @@ fi
 # `export PYTHONUTF8=1` above would pass even if someone wrote it wrong or put
 # it after a check that already needed it. This asks the interpreter itself.
 utf8_mode() {
-  python3 -c "import sys; sys.exit(0 if sys.flags.utf8_mode else 1)"
+  "$PYTHON" -c "import sys; sys.exit(0 if sys.flags.utf8_mode else 1)"
 }
-if have python3; then
+if have "$PYTHON"; then
   check "python runs in utf-8 mode" utf8_mode
 else
   skip "python runs in utf-8 mode" "python3 not installed"
@@ -202,7 +229,7 @@ fi
 # edited, and every check above would still pass -- the substrate is the one
 # thing here whose absence nothing else would notice.
 host_layer_stays_thin() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import sys, yaml
 
 GROUPS = {
@@ -240,7 +267,7 @@ if 'Ubuntu-26.04' not in set_script:
     sys.exit(1)
 PY
 }
-if have python3 && have_pyyaml; then
+if have "$PYTHON" && have_pyyaml; then
   check "the host layer stays thin" host_layer_stays_thin
 else
   skip "the host layer stays thin" "python3/pyyaml not installed"
@@ -251,7 +278,7 @@ fi
 # that validated configuration rather than code -- and whose absence once let CI
 # report success while validating no Ghostty config at all.
 wt_schema() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import json, re, sys
 try:
     import jsonschema
@@ -262,7 +289,7 @@ s = re.sub(r',(\s*[}\]])', r'\1', s)
 jsonschema.validate(json.loads(s), json.load(open('schemas/windows-terminal.json', encoding='utf-8')))
 PY
 }
-if have python3 && python3 -c "import jsonschema" 2> /dev/null; then
+if have "$PYTHON" && "$PYTHON" -c "import jsonschema" 2> /dev/null; then
   check "windows terminal settings match the published schema" wt_schema
 else
   skip "windows terminal settings match the published schema" "jsonschema not installed"
@@ -285,7 +312,7 @@ fi
 # widen it (e.g. an explicit allow-list of intentionally unbound ids), not as
 # a rule to silence.
 actions_and_keybindings_resolve() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import json, re, sys
 
 def jsonc(path):
@@ -311,7 +338,7 @@ for p in problems:
 sys.exit(1 if problems else 0)
 PY
 }
-if have python3; then
+if have "$PYTHON"; then
   check "every action id and keybinding id resolve to each other" actions_and_keybindings_resolve
 else
   skip "every action id and keybinding id resolve to each other" "python3 not installed"
@@ -323,7 +350,7 @@ fi
 # and still work -- with glyphs that look subtly different and no way to tell
 # why. One font makes that failure immediate.
 one_nerd_font() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import json, re, sys, yaml
 
 problems = []
@@ -371,7 +398,7 @@ PY
 # same gap Task 2 found and fixed for the manifest checks (check() has no way
 # to tell "the tool is missing" from "the check failed" on its own -- that is
 # what the guard form is for).
-if have python3 && have_pyyaml; then
+if have "$PYTHON" && have_pyyaml; then
   check "one nerd font, declared everywhere it renders" one_nerd_font
 else
   skip "one nerd font, declared everywhere it renders" "python3/pyyaml not installed"
@@ -385,7 +412,7 @@ fi
 # naming the same thing must be made to agree by a check, not by whoever edits
 # one of them remembering the other exists.
 starting_directory_stays_on_wsl() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import json, re, sys, yaml
 
 problems = []
@@ -424,7 +451,7 @@ for p in problems:
 sys.exit(1 if problems else 0)
 PY
 }
-if have python3 && have_pyyaml; then
+if have "$PYTHON" && have_pyyaml; then
   check "the terminal opens on wsl, matching the distro configuration.winget installs" starting_directory_stays_on_wsl
 else
   skip "the terminal opens on wsl, matching the distro configuration.winget installs" "python3/pyyaml not installed"
@@ -513,7 +540,7 @@ check "apt and mise do not claim the same package" no_manager_overlap
 # Asserted rather than trusted to bump-tools.sh, because a hand edit never goes
 # near the bumper, and because the bumper itself missed these for a while.
 linter_versions_agree() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import re, sys
 
 def mise(tool):
@@ -551,7 +578,7 @@ for p in problems:
 sys.exit(1 if problems else 0)
 PY
 }
-if have python3; then
+if have "$PYTHON"; then
   check "the linter versions agree across all three manifests" linter_versions_agree
 else
   skip "the linter versions agree across all three manifests" "python3 not installed"
@@ -571,7 +598,7 @@ fi
 # have() guard is covered the moment it is written, not the moment someone
 # remembers to also update a check about it.
 guarded_tools_are_declared() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import re
 import sys
 
@@ -612,7 +639,7 @@ if missing:
     sys.exit(1)
 PY
 }
-if have python3; then
+if have "$PYTHON"; then
   check "every have()-guarded tool is declared for WSL" guarded_tools_are_declared
 else
   skip "every have()-guarded tool is declared for WSL" "python3 not installed"
@@ -733,7 +760,7 @@ no_macos_in_ignore() {
 check "git/ignore carries no macOS entries" no_macos_in_ignore
 
 # --- Claude Code -------------------------------------------------------------
-check "claude settings" python3 -c "import json; json.load(open('wsl/claude/settings.json', encoding='utf-8'))"
+check "claude settings" "$PYTHON" -c "import json; json.load(open('wsl/claude/settings.json', encoding='utf-8'))"
 
 # The Windows host's credential stores are readable from inside WSL. They are
 # not on the Mac, because there is no host. This asserts every category is
@@ -742,7 +769,7 @@ check "claude settings" python3 -c "import json; json.load(open('wsl/claude/sett
 # protection while providing none, and this list is exercised for the first
 # time by a human, by hand, in Task 12.
 deny_covers_the_host() {
-  python3 - << 'PY'
+  "$PYTHON" - << 'PY'
 import json, sys
 deny = json.load(open('wsl/claude/settings.json', encoding='utf-8'))['permissions']['deny']
 
@@ -786,7 +813,7 @@ check "the deny list covers the Windows host, not just Linux" deny_covers_the_ho
 # writing it down would freeze it -- a better default in a future model would be
 # overridden by a line nobody revisits.
 no_effort_level() {
-  python3 -c "
+  "$PYTHON" -c "
 import json, sys
 s = json.load(open('wsl/claude/settings.json', encoding='utf-8'))
 sys.exit(1 if 'effortLevel' in s else 0)

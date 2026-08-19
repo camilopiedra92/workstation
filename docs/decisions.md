@@ -584,3 +584,42 @@ list from check.sh's own source rather than a second hand-maintained list, since
 a parallel list is precisely the shape that went stale twice today. Build the
 exclusion mechanism anyway, empty, with its purpose stated -- otherwise the first
 genuinely host-only tool gets an ad-hoc workaround.
+## After the build -- decisions taken while applying the repo to the machine
+
+These were not made during the build. They were made in Task 10, against a real
+Ubuntu, where the first thing a manifest meets is a machine that disagrees.
+
+Ruling R32: check.sh and drift.sh resolve their Python interpreter by capability
+-- the first `python3` that can import yaml -- rather than by the bare name.
+
+Why: on the first `./check.sh --strict` ever run inside Ubuntu, five checks
+reported `python3/pyyaml not installed` on a machine where every dependency was
+present and correctly declared. `wsl/apt-packages.txt` had python3-yaml and
+python3-jsonschema, dpkg confirmed both `ii`, and `/usr/bin/python3` imported
+them. But mise puts its own python3 shim ahead of /usr/bin on PATH, so the bare
+name resolved to mise's interpreter -- the one Python on the machine without
+either library.
+
+R15 and R23 approved those apt packages after confirming they "do not collide"
+with mise's python. They do coexist. The failure mode runs the other way: the
+shim shadows the interpreter the libraries were installed for. What was verified
+was not what mattered, which is the same shape as every other defect this repo
+found in its own checks -- the configuration was right and the check was wrong
+about it.
+
+Rejected -- hardcode /usr/bin/python3: correct in WSL and broken in CI, where
+pyyaml arrives by pip onto setup-python's interpreter and /usr/bin/python3 is a
+different one. A fix that trades a WSL failure for a CI failure is not a fix.
+
+Rejected -- install pyyaml and jsonschema into mise's python: a fourth install
+path, duplicating libraries apt already provides, and a second copy of each to
+keep pinned. The machine does not need two of them; the script needs to find the
+one that exists.
+
+Cost if wrong: the resolver decides on yaml alone. A machine where yaml and
+jsonschema lived on *different* interpreters would run the schema check against
+the one without jsonschema and skip it, reporting a cause that is true as
+written but points at the wrong interpreter. Both libraries arrive from one
+manager in both environments -- apt in WSL, pip in CI -- so that machine does
+not exist today, and the check still degrades to a skip rather than a false
+pass.

@@ -56,6 +56,16 @@ DRIFTED=0
 
 have() { command -v "$1" > /dev/null 2>&1; }
 
+# Resolved by capability rather than by name, for the reason check.sh sets out
+# at length: mise's python3 shim shadows the /usr/bin/python3 that apt installed
+# python3-yaml against, so the bare name finds the one interpreter without it.
+PYTHON=python3
+if ! "$PYTHON" -c "import yaml" > /dev/null 2>&1; then
+  if /usr/bin/python3 -c "import yaml" > /dev/null 2>&1; then
+    PYTHON=/usr/bin/python3
+  fi
+fi
+
 # printf '%s\n' "" still emits one blank line, which comm would then count as
 # a real (empty-string) entry on both sides of every comparison. Guarding
 # empty input here is what keeps an empty manifest from reading as agreement
@@ -154,7 +164,7 @@ for line in lines[header_idx + 1 :]:
     print("\t".join(row.get(c, "") for c in cols))
 PY
   )
-  python3 -c "$script" "$@"
+  "$PYTHON" -c "$script" "$@"
 }
 
 # --- apt -----------------------------------------------------------------
@@ -315,7 +325,7 @@ if resolve_winget; then
   else
     installed_ids=$(lines "$parsed" | awk -F'\t' '{print $2}' | grep -v '^$' | sort -u)
 
-    declared_ids=$(python3 -c "
+    declared_ids=$("$PYTHON" -c "
 import yaml
 doc = yaml.safe_load(open('windows/configuration.winget', encoding='utf-8'))
 ids = sorted({
