@@ -182,72 +182,155 @@ Type `ls`. Icons, not empty boxes.
 
 # Task 11 — move the work onto ext4
 
-Remember what this is buying: **0.065s against 7.554s**, measured on this machine.
+Remember what this is buying. Creating 2000 files: 0.065s on ext4 against 7.554s
+on `/mnt/c`. And measured afterwards on a real repository, `git status`: 4.5 ms
+on ext4 against 9.1 s on `/mnt/c` — though that second pair is not like for like,
+because the Windows copy still had its `node_modules` and the ext4 clone did not.
+
+**This task was run once, on 2026-08-18, and the steps below are what it turned
+into — not what it started as.** Three of them were wrong in ways that would have
+lost work. Each carries the correction and why, because the same mistakes are
+available to anyone rebuilding this machine.
 
 ## Step 1 — Inventory what is on the Windows side, with its state
 
-Nothing is deleted before this list exists and every entry is accounted for.
+Nothing moves before this list exists and every entry is accounted for.
 
 ```bash
-for d in /mnt/c/Users/camilo.piedrahita/Development/*/; do
+base=/mnt/c/Users/$USER/Development
+for d in "$base"/*/; do
   name=$(basename "$d")
-  printf '%-26s ' "$name"
-  if [ -d "$d/.git" ]; then
-    remote=$(git -C "$d" remote get-url origin 2>/dev/null || echo "NO REMOTE")
-    dirty=$(git -C "$d" status --porcelain 2>/dev/null | wc -l)
-    unpushed=$(git -C "$d" log --oneline @{u}.. 2>/dev/null | wc -l)
-    printf 'dirty=%-4s unpushed=%-4s %s\n' "$dirty" "$unpushed" "$remote"
-  else
-    printf 'NOT A GIT REPO -- must be copied, not re-cloned\n'
+  if [ ! -d "$d/.git" ]; then
+    printf '%-24s NOT A GIT REPO -- must be copied, not re-cloned\n' "$name"
+    continue
   fi
+  remote=$(git -C "$d" remote get-url origin 2> /dev/null) || remote=""
+  printf '%-24s dirty=%-5s remote=%s\n' \
+    "$name" "$(git -C "$d" status --porcelain | wc -l)" "${remote:-NONE}"
+  git -C "$d" for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads |
+    while read -r branch up; do
+      if [ -z "$up" ]; then
+        printf '    %-28s NO UPSTREAM -- unpushed state UNKNOWN\n' "$branch"
+      else
+        printf '    %-28s %s commits not in %s\n' \
+          "$branch" "$(git -C "$d" rev-list --count "$up..$branch")" "$up"
+      fi
+    done
 done
 ```
 
-Known from the survey: `aipm`, `glow`, `surge-pods` and `vr` are git repos;
-`obsi`, `testaware` and `surge-pods-migration` are not.
+**Why this replaced the original.** The first version of this step ran
+`git log --oneline @{u}.. | wc -l` on each repository and printed the result as
+`unpushed=`. For a branch with no upstream that command fails, prints nothing,
+and `wc -l` counts zero lines — so the column read `unpushed=0` for three
+repositories that had no remote at all. The reassuring number meant "could not
+answer", and nothing on the line said so.
 
-## Step 2 — Push anything unpushed, first
+It also looked only at the checked-out branch. A repository whose `main` was
+clean and pushed reported entirely green while two other branches held twelve
+commits that existed on one disk. The version above asks every branch, and says
+UNKNOWN where it cannot answer instead of guessing zero.
 
-**Any repo showing `dirty>0` or `unpushed>0` must be resolved before it moves.**
-A re-clone discards both, silently. This is the one genuinely destructive risk in
-the whole plan, and this step is what removes it.
+## Step 2 — Resolve everything the inventory could not vouch for
+
+**Before anything is re-cloned:** every branch showing commits not in its
+upstream, every branch marked UNKNOWN, and every repository whose remote is NONE.
+A re-clone silently discards all three.
+
+Push what should be pushed. What should not be pushed is fine to keep local —
+but then that repository is copied, not re-cloned, and Step 4 decides that by
+what the inventory said rather than by category.
 
 ## Step 3 — Authenticate git inside Ubuntu
 
 ```bash
 gh auth login
 gh auth setup-git
+git -C ~/workstation status --porcelain
 ```
 
 This is a separate authentication from the one on Windows. That is deliberate —
 `git/config` points its credential helper at `gh`, so if this step is skipped
 every push fails with an opaque credential error that names neither cause.
 
-## Step 4 — Re-clone the git repositories
+**The third line is not optional, and this is why.** `~/.config/git/config` is a
+symlink into this repository, so `gh auth setup-git` writes into a tracked file —
+and what it writes is the absolute path of the `gh` binary it happens to be
+running from:
+
+```
+helper = !/home/you/.local/share/mise/installs/gh/2.97.0/.../gh auth git-credential
+```
+
+That path carries gh's version inside it. The first `bump-tools.sh` run that
+moves gh deletes it, and every push afterwards fails with exactly the credential
+error this step exists to prevent. The committed value is
+`!gh auth git-credential` — the bare name, resolved through mise's shim
+directory, which is already first on PATH. The comment above it in
+`wsl/git/config` says precisely this, and `gh` overwrote it anyway.
+
+So if that `status` prints `M wsl/git/config`, revert it and confirm the bare
+name still authenticates:
+
+```bash
+git -C ~/workstation checkout -- wsl/git/config
+printf 'protocol=https\nhost=github.com\n\n' | gh auth git-credential get
+```
+
+The token lives in `~/.config/gh/hosts.yml`, not in the path, so the bare name
+resolves and returns the same token.
+
+## Step 4 — Move each repository by what the inventory said
+
+Two kinds, decided per repository rather than per category:
+
+**Has a remote, and every branch is in it → re-clone.** Nothing is reconstructed
+from the Windows copy, and the working tree arrives with LF endings.
 
 ```bash
 mkdir -p ~/Development && cd ~/Development
-for r in aipm glow surge-pods vr; do
-  git clone "$(git -C /mnt/c/Users/camilo.piedrahita/Development/$r remote get-url origin)" "$r"
-done
+git clone "$(git -C "$base/<repo>" remote get-url origin)" "<repo>"
+```
+
+**No remote, or any branch that lives nowhere else → copy, including `.git`.**
+The original version of this step re-cloned four repositories from
+`git remote get-url origin`; three of them had no remote, so it would have run
+`git clone ""`. Their history exists in exactly one place, and only a copy of
+`.git` preserves it.
+
+```bash
+tar -C "$base" --exclude=node_modules -cf - "<repo>" | tar -C ~/Development -xf -
+```
+
+**`--exclude=node_modules` matters twice.** It is the bulk of the bytes — 245 MB
+of 447 MB here — and copying it over 9p is the slowest thing in this runbook. It
+is also worthless: those trees were installed by Windows Node, so any native
+binding inside them is a Windows binary. Reinstall with `pnpm install` instead.
+
+If a re-cloned repository turns out to be missing a branch that only the Windows
+copy has, fetch it straight from that copy — no remote and no network involved:
+
+```bash
+git -C ~/Development/<repo> fetch "$base/<repo>" 'refs/heads/<branch>:refs/heads/<branch>'
 ```
 
 ## Step 5 — Copy the directories that are not git repos
 
 ```bash
-for d in obsi testaware surge-pods-migration; do
-  cp -r "/mnt/c/Users/camilo.piedrahita/Development/$d" ~/Development/
+for d in <the ones the inventory marked NOT A GIT REPO>; do
+  tar -C "$base" --exclude=node_modules -cf - "$d" | tar -C ~/Development -xf -
 done
 ```
 
 ## Step 6 — Bring the untracked files a clone cannot
 
-`.remember/`, `.claude/settings.local.json`, `.env` files and `.mcp.json` are
-untracked by design and do not survive a clone:
+`.remember/`, `.claude/`, `.env` files and `.mcp.json` are untracked by design and
+do not survive a clone. Copies made with `tar` already carry them; only re-cloned
+repositories need this:
 
 ```bash
-for r in aipm glow surge-pods vr; do
-  src="/mnt/c/Users/camilo.piedrahita/Development/$r"
+for r in <the re-cloned ones>; do
+  src="$base/$r"
   for extra in .remember .claude .mcp.json .env .env.local; do
     [ -e "$src/$extra" ] && cp -r "$src/$extra" ~/Development/$r/ && echo "$r: brought $extra"
   done
@@ -256,54 +339,80 @@ done
 
 ## Step 7 — Verify before anything is deleted
 
+For every repository, compare the new HEAD against its Windows twin:
+
 ```bash
-for r in aipm glow surge-pods vr; do
-  printf '%-16s ' "$r"
-  git -C ~/Development/$r log --oneline -1
+for r in <every git repo>; do
+  w=$(git -C "$base/$r" rev-parse --short HEAD)
+  l=$(git -C ~/Development/$r rev-parse --short HEAD)
+  printf '%-16s windows=%s ext4=%s %s\n' "$r" "$w" "$l" \
+    "$([ "$w" = "$l" ] && echo MATCH || echo DIFFERS)"
 done
 ls ~/Development
 ```
 
-Expect seven entries, each git repo at the same commit as its Windows twin.
+**DIFFERS is not automatically wrong, and this is the line that has to be read
+rather than glanced at.** A re-clone can legitimately be *ahead*: here
+`surge-pods` came back 72 commits and eight days newer than the Windows copy,
+which had simply never been pulled. What makes that safe is not the count but the
+ancestry — prove the old HEAD is contained in the new one:
+
+```bash
+git -C ~/Development/<repo> merge-base --is-ancestor \
+  "$(git -C "$base/<repo>" rev-parse HEAD)" HEAD \
+  && echo "windows HEAD is an ancestor -- nothing lost" \
+  || echo "DIVERGED -- stop and resolve by hand"
+```
+
+A copied repository must be MATCH. Only a re-cloned one may differ, and only
+forwards.
+
+Expect the same number of entries in `~/Development` as the inventory listed.
 
 **The Windows copies stay.** They are not deleted in this task, or in any task.
 Deleting them is its own decision, taken later, after you have used the new
 environment for real work.
 
-## Step 8 — Settle `core.fsmonitor` with a measurement
+## Step 8 — `core.fsmonitor` is settled. Do not measure it again.
 
-This is the deferred item from Task 7. The Mac's config enables `fsmonitor` and
-`untrackedCache` on FSEvents evidence; here it would be git's own daemon over a
-virtualised ext4 volume, which is a different mechanism at a different cost. We
-did not port it on faith.
+This was the deferred item from Task 7, and it now has an answer, recorded as R33
+in `docs/decisions.md`: **it stays out of `wsl/git/config`.**
 
-```bash
-cd ~/Development/surge-pods
-git config --local core.fsmonitor false
-for i in 1 2 3; do /usr/bin/time -f '%e off' git status > /dev/null; done
-git config --local core.fsmonitor true
-git status > /dev/null            # warm the daemon
-for i in 1 2 3; do /usr/bin/time -f '%e on ' git status > /dev/null; done
-git config --local --unset core.fsmonitor
+```
+$ git fsmonitor--daemon status
+fatal: fsmonitor--daemon not supported on this platform
 ```
 
-**Send me both sets of numbers.** If `on` is meaningfully faster, the setting
-goes into `wsl/git/config` with the measurement in its comment. If it is not, it
-stays out and the numbers go in the commit message.
+Ubuntu's git is not built with the daemon, so `core.fsmonitor = true` here is
+neither faster nor slower — it is inert. And there was nothing to buy in any
+case: twenty `git status` runs took 0.09 s with it off and 0.09 s with it on,
+which is 4.5 ms each on a 308-commit repository.
 
-Either outcome is a result. Only skipping the measurement is a failure — a
-setting that buys nothing is not neutral, it is a claim nobody checked.
+Re-open this only if `git fsmonitor--daemon status` ever answers differently.
 
 ---
 
-## When you are done
+## What this run answered
 
-Send me:
+Both tasks were executed on 2026-08-18. The four questions this section used to
+ask are answered, and the answers are why several steps above now read
+differently:
 
-1. Anything that failed in Task 10, verbatim
-2. The Step 6 pin table if anything mismatched
-3. Whether `check.sh --strict` came back fully green for the first time
-4. The `fsmonitor` numbers
+1. **Task 10 failures.** Five, all one cause: `check.sh` resolved `python3` to
+   mise's shim, which has neither pyyaml nor jsonschema, while apt had installed
+   both against `/usr/bin/python3`. Fixed by resolving the interpreter by
+   capability — R32.
+2. **The pin table.** Eleven of eleven honoured, no mismatch.
+3. **`check.sh --strict`.** Green inside Ubuntu for the first time: 34 checks,
+   nothing skipped. That includes the two that had never executed anywhere —
+   `zsh syntax`, and `install.sh --links-only` idempotence — both passing on
+   first run.
+4. **`fsmonitor`.** Settled and closed: see Step 8 and R33.
+
+What the migration itself cost, for anyone repeating it: nothing was lost, but
+only because Step 1 was rewritten mid-run. As originally written it would have
+re-cloned three repositories that have no remote, and discarded two branches
+holding twelve commits that exist on no server. Both are R34.
 
 Then Task 12 moves Claude Code in, and that runbook is already written at
 `docs/runbook-task-12-claude-into-wsl.md`.

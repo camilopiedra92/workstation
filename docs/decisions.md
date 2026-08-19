@@ -586,8 +586,11 @@ exclusion mechanism anyway, empty, with its purpose stated -- otherwise the firs
 genuinely host-only tool gets an ad-hoc workaround.
 ## After the build -- decisions taken while applying the repo to the machine
 
-These were not made during the build. They were made in Task 10, against a real
-Ubuntu, where the first thing a manifest meets is a machine that disagrees.
+These were not made during the build. They were made in Tasks 10 and 11, against
+a real Ubuntu, where the first thing a manifest meets is a machine that disagrees.
+Every one of them corrects something the build got wrong and could not have
+known -- which is the argument for running the machine phase against a written
+plan rather than improvising it, and for writing down what the plan got wrong.
 
 Ruling R32: check.sh and drift.sh resolve their Python interpreter by capability
 -- the first `python3` that can import yaml -- rather than by the bare name.
@@ -623,3 +626,73 @@ written but points at the wrong interpreter. Both libraries arrive from one
 manager in both environments -- apt in WSL, pip in CI -- so that machine does
 not exist today, and the check still degrades to a skip rather than a false
 pass.
+
+Ruling R33: core.fsmonitor stays out of wsl/git/config. This closes the item R2
+deferred from Task 7.
+
+The measurement was taken as specified, on the migrated surge-pods: twenty
+`git status` runs took 0.09 s with fsmonitor off and 0.09 s with it on -- 4.5 ms
+each, on a 308-commit repository. But the number is not what decides it. `git
+fsmonitor--daemon status` answers `fatal: fsmonitor--daemon not supported on this
+platform`: Ubuntu's git 2.53 is not built with the daemon at all.
+
+That makes the setting inert rather than slow, which is the worse of the two
+failures. A config line that reads as an active optimisation and does nothing is
+a claim the next reader has no reason to doubt and no way to test -- the exact
+shape the Mac repo's entry does not have, because on FSEvents it genuinely works.
+
+Cost if wrong: on a future Ubuntu whose git ships the daemon, this machine leaves
+a real optimisation unused. That is cheap to reverse and the condition is one
+command, so Step 8 of the runbook now names it: re-open only if
+`git fsmonitor--daemon status` ever answers differently.
+
+Ruling R34: the migration moves each repository by what it actually has, and the
+inventory that decides this reports UNKNOWN rather than zero.
+
+Task 11 as written sorted the seven directories into two categories fixed in
+advance -- four git repos to re-clone, three non-repos to copy -- and its Step 1
+printed an `unpushed=` column per repository. Run against the real machine, both
+were wrong in the same direction.
+
+Three of the four "git repos to re-clone" have no remote at all: aipm, glow and
+vr, 175 commits between them, existing on one disk. `git clone "$(git remote
+get-url origin)"` would have run `git clone ""`. And surge-pods, which does have
+a remote, had two branches that the remote has never seen -- twelve commits --
+so a clean re-clone of it would have dropped them silently.
+
+The inventory did not merely fail to warn about any of this. It printed
+`unpushed=0` for all three remote-less repositories, because `git log @{u}..`
+fails when there is no upstream, prints nothing, and `wc -l` counts zero lines.
+The most reassuring value in the column was the one that meant "this command
+could not run". It also asked only the checked-out branch, which is why
+surge-pods -- clean and pushed on main -- reported entirely green.
+
+So: the category is derived per repository from the inventory, not fixed in
+advance, and any branch whose upstream state cannot be computed prints UNKNOWN.
+node_modules is excluded from every copy: 245 MB of the 447 MB, and installed by
+Windows Node, so every native binding in it is a Windows binary.
+
+Cost if wrong: the inventory is longer and prints a line per branch rather than
+per repository. On seven repositories that is fifteen lines instead of seven, and
+it is the only place in this repo where a check answers a question about work
+that exists nowhere else.
+
+Ruling R35: `gh auth setup-git` is reverted, not accommodated.
+
+`~/.config/git/config` is a symlink into this repository, so that command writes
+into a tracked file -- and it writes the absolute path of the gh binary it is
+running from, which under mise carries the version: `.../installs/gh/2.97.0/...`.
+The committed value is the bare `!gh auth git-credential`, with a comment
+directly above it explaining that an absolute path here would go stale. gh
+overwrote the value and left the comment.
+
+Verified before reverting: with the bare name restored, `gh auth git-credential
+get` returns the token. The credential lives in ~/.config/gh/hosts.yml and the
+helper only has to be found on PATH, which mise's shim directory already
+guarantees.
+
+Cost if wrong: if some future caller invokes git with a PATH that lacks mise's
+shims, the bare name will not resolve and that push fails. The absolute path
+would survive that case -- and fail the far more likely one, the first gh version
+bump, which bump-tools.sh performs on purpose. The runbook now checks for this
+with `git status` immediately after the command that causes it.
