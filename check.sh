@@ -431,55 +431,25 @@ else
 fi
 
 # --- PowerShell ----------------------------------------------------------------
-# windows/*.ps1 gets no static analysis anywhere else: this file is Windows-
-# agnostic by design (see the header above), and neither CI job looked at the
-# scripts themselves until now -- only at the manifest and settings files they
-# apply. bootstrap.ps1 is also the one script in this repo that raises UAC and
-# changes the machine, so this only parses it, never runs it. The AST parser
-# answers "is this syntactically valid PowerShell" without executing a line --
-# [System.Management.Automation.Language.Parser]::ParseFile, not Invoke-Expression
-# or dot-sourcing.
+# windows/*.ps1 is not parsed here. It was, briefly: guarded by `have pwsh ||
+# have powershell`, which is honest about the precondition but does not fix
+# the real problem -- this script's whole contract is that its verdict means
+# the same thing wherever it runs, which is why --strict turns a skip into a
+# failure and why a check that did not run is not a check that passed. A
+# check that structurally cannot run on the target machine (WSL has no
+# PowerShell, and this repo is not putting one there just to lint two files)
+# breaks that contract no matter how it is guarded; the guard only makes the
+# breakage quiet. The mirror of this rule already exists for drift.sh: out of
+# CI goes what CI cannot answer honestly. Out of check.sh goes what check.sh
+# cannot answer everywhere.
 #
-# Written to a temp .ps1 file and run with -File rather than piped over stdin:
-# both Windows PowerShell and pwsh treat piped stdin as a series of interactive
-# commands, not a script block, and a pipeline's scriptblock variables (here,
-# whether any file failed to parse) do not survive that -- confirmed directly,
-# not assumed, after a first attempt silently checked nothing and still
-# reported success.
-powershell_parses() {
-  local ps script status
-  if have pwsh; then
-    ps=pwsh
-  elif have powershell; then
-    ps=powershell
-  else
-    return 1
-  fi
-  script=$(mktemp --suffix=.ps1) || return 1
-  cat > "$script" << 'PS1'
-$ErrorActionPreference = 'Stop'
-$failed = $false
-Get-ChildItem -Path 'windows' -Filter '*.ps1' | ForEach-Object {
-  $tokens = $null
-  $parseErrors = $null
-  [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
-  if ($parseErrors.Count -gt 0) {
-    $failed = $true
-    foreach ($e in $parseErrors) { Write-Output "$($_.Name): $e" }
-  }
-}
-if ($failed) { exit 1 } else { exit 0 }
-PS1
-  "$ps" -NoProfile -NonInteractive -File "$script"
-  status=$?
-  rm -f "$script"
-  return "$status"
-}
-if have pwsh || have powershell; then
-  check "powershell parses" powershell_parses
-else
-  skip "powershell parses" "no powershell available"
-fi
+# The coverage moved rather than disappeared: the windows CI job's
+# PSScriptAnalyzer step is the only thing checking windows/*.ps1 now, and it
+# is load-bearing there rather than belt-and-braces -- see that job for the
+# other half of this reasoning. The cost, stated rather than hidden: a .ps1
+# syntax error is no longer caught on the authoring host before push. On a
+# repo whose Windows layer is two files, that is a cost worth paying to keep
+# this file's verdict meaning one thing everywhere it runs.
 
 # --- WSL manifests -----------------------------------------------------------
 if have taplo; then
@@ -585,6 +555,67 @@ if have python3; then
   check "the linter versions agree across all three manifests" linter_versions_agree
 else
   skip "the linter versions agree across all three manifests" "python3 not installed"
+fi
+
+# actionlint reached this file the same way the PowerShell check almost
+# stayed: a tool check.sh depends on, guarded by have() so its own absence is
+# graceful, with nothing asserting that the WSL machine this hook actually
+# runs on ever installs it. "Declared for CI" and "declared for the machine
+# that runs the checks" are different claims, and nothing checked the second
+# one -- twice, independently, before this existed.
+#
+# The tool list below is not a second hand-maintained list of names: that
+# shape is exactly what went stale twice already (linter_versions_agree's own
+# tuple list needed a fourth entry by hand; bump-tools.sh's old mirror list
+# needed the same). It is read out of check.sh's own source instead, so a new
+# have() guard is covered the moment it is written, not the moment someone
+# remembers to also update a check about it.
+guarded_tools_are_declared() {
+  python3 - << 'PY'
+import re
+import sys
+
+# A tool have()-guarded here that is deliberately not meant to be declared
+# for WSL. Empty today, on purpose, not because no such tool could ever
+# exist: PowerShell was the one candidate, and the resolution there was to
+# remove the check rather than exempt the tool, because check.sh's contract
+# is that its verdict means the same thing wherever it runs -- a check that
+# structurally cannot run in WSL does not belong in this file at all, guarded
+# or not. A name only belongs here if a future have()-guarded check has some
+# other legitimate reason to exist in check.sh without a WSL install path;
+# state that reason next to the name when one is added, the same way this
+# paragraph states why the list starts empty.
+EXCLUDE = set()
+
+text = open('check.sh', encoding='utf-8').read()
+have_tools = set()
+for line in text.splitlines():
+    stripped = line.strip()
+    if stripped.startswith('#'):
+        continue
+    for m in re.finditer(r'(?:^|[(&|]|\bif\s+|\belif\s+|\bwhile\s+)!?\s*have\s+([a-z][a-z0-9_.-]*)', stripped):
+        have_tools.add(m.group(1))
+have_tools -= EXCLUDE
+
+apt_text = open('wsl/apt-packages.txt', encoding='utf-8').read()
+mise_text = open('wsl/mise/config.toml', encoding='utf-8').read()
+
+missing = []
+for tool in sorted(have_tools):
+    in_apt = re.search(r'^%s$' % re.escape(tool), apt_text, re.M) is not None
+    in_mise = re.search(r'^%s = "' % re.escape(tool), mise_text, re.M) is not None
+    if not (in_apt or in_mise):
+        missing.append(tool)
+
+if missing:
+    print('have()-guarded in check.sh but declared in no WSL manifest: %s' % ', '.join(missing))
+    sys.exit(1)
+PY
+}
+if have python3; then
+  check "every have()-guarded tool is declared for WSL" guarded_tools_are_declared
+else
+  skip "every have()-guarded tool is declared for WSL" "python3 not installed"
 fi
 
 # --- zsh and the prompt -------------------------------------------------------

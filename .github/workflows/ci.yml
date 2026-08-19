@@ -228,12 +228,16 @@ jobs:
           }
           if ($bad) { throw "DSC resource not found in the gallery: $($bad -join ', ')" }
 
-      # windows/*.ps1 got no static analysis anywhere until now -- check.sh's
-      # own PowerShell check only proves a file parses; this proves it also
-      # follows PSScriptAnalyzer's rules. bootstrap.ps1 is the one script here
-      # that raises UAC and changes the machine, which is exactly why this
-      # analyzes rather than runs it: Invoke-ScriptAnalyzer reads the file, it
-      # does not execute it.
+      # This is the only thing that checks windows/*.ps1 -- load-bearing, not
+      # belt-and-braces. check.sh briefly carried its own parse-only check
+      # too, guarded by `have pwsh || have powershell`; it was removed rather
+      # than kept as a second opinion, because a Windows-only runtime cannot
+      # be a precondition of a check whose verdict has to mean the same thing
+      # on WSL as everywhere else. That means a .ps1 syntax error is no
+      # longer caught before push -- only here. bootstrap.ps1 is the one
+      # script here that raises UAC and changes the machine, which is exactly
+      # why this analyzes rather than runs it: Invoke-ScriptAnalyzer reads
+      # the file, it does not execute it.
       #
       # windows-latest ships PSScriptAnalyzer preinstalled (1.25.0, per
       # actions/runner-images' own Windows2022-Readme.md) -- but taking
