@@ -1225,16 +1225,17 @@ else
 fi
 
 # CLAUDE.md's contract says its HTML comments are stripped before injection.
-# That is true only of comments starting at column 0 -- measured in the PR #11
-# review with two claude -p runs: a comment indented under a list item was
-# reproduced verbatim from the loaded context, a column-0 one was absent. An
-# indented comment is therefore injected as instruction text, silently, which
-# is exactly the class of rule this file keeps as a check.
+# That is true only of comments STARTING a line at column 0 -- measured in the
+# PR #11 review with claude -p runs: a comment indented under a list item and
+# a comment trailing a text line were both reproduced verbatim from the loaded
+# context, while column-0 blocks were absent. Any comment that is not the
+# first thing on its line is therefore injected as instruction text, silently,
+# which is exactly the class of rule this file keeps as a check.
 claude_md_comments_column0() {
   local hits
-  hits=$(grep -nE '^[[:space:]]+<!--' wsl/claude/CLAUDE.md || true)
+  hits=$(grep -n '<!--' wsl/claude/CLAUDE.md | grep -vE '^[0-9]+:<!--' || true)
   [ -z "$hits" ] || {
-    echo "indented HTML comments are injected, not stripped: $hits"
+    echo "comments not at column 0 are injected, not stripped: $hits"
     return 1
   }
 }

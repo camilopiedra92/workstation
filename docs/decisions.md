@@ -1203,9 +1203,17 @@ SmartBear/Cisco study (2006, ~2,500 reviews) found 200-400 LOC per session
 with 70-90% defect discovery, and Google's small-CL guidance arrived at the
 same range independently -- a single old industrial study, corroborated in
 direction, which is why the file says "~400" and not a precision it does
-not have. The speed half: PR size correlates with review LATENCY at
-r = 0.004-0.095 (arXiv:2108.09946), so "small reviews faster" is the wrong
-justification; detection quality is the right one. The old text already
+not have. The speed half is contested, and this note says so rather than
+picking a side: a vendor's own A/B telemetry reports near-zero correlation
+between changed lines and review time (r = 0.004-0.095, arXiv:2508.09676,
+DeputyDev), while the peer-reviewed latency study finds source-code churn
+the second-largest factor at 20.4% of explained variance (arXiv:2108.09946).
+Either way "small reviews faster" cannot carry the rule; detection quality
+does. The first draft of this paragraph pinned the vendor's numbers on the
+peer-reviewed paper; the PR #11 re-review extracted both PDFs and split
+them correctly -- the second occurrence of R45's citation lesson in one
+restructure, which is the strongest argument yet for reviews that read the
+sources. The old text already
 argued detection in two of its three clauses -- only "expensive" read as
 cost -- so this is a sharpening of record, not a reversal.
 
