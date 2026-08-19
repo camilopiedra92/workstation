@@ -28,7 +28,10 @@
 #   4. NEVER \033[0m. See the long note in the palette section.
 #
 # Colors are 16-color ANSI, not hex: that way the line inherits the palette of
-# the Ghostty theme (Catppuccin Mocha) and still matches if you ever change it.
+# the terminal's scheme (Catppuccin Mocha (AA)) and still matches if you ever
+# change it. That scheme moves two ANSI slots off canonical Catppuccin so that
+# every pair this file paints clears WCAG AA; the ratios are recorded beside
+# the colours in windows/terminal/settings.json and re-measured by check.sh.
 
 set -uo pipefail
 
@@ -261,10 +264,10 @@ if [ -n "$BRANCH" ]; then
     [ "$ahead" != "+0" ] && body+=" ⇡${ahead#+}"
     [ "$behind" != "-0" ] && body+=" ⇣${behind#-}"
   fi
-  seg 100 90 37 "$body"
+  seg 100 90 30 "$body"
 fi
 
-[ -n "$WORKTREE" ] && seg 100 90 37 "⑂ ${WORKTREE}"
+[ -n "$WORKTREE" ] && seg 100 90 30 "⑂ ${WORKTREE}"
 
 # --- Pull request ---
 # Only shows up if the branch has an open PR. The color is the review state:
@@ -274,7 +277,7 @@ if [ "$PR_NUM" != "0" ]; then
   case $PR_STATE in
     approved) seg 42 32 30 " #${PR_NUM}" ;;
     changes_requested) seg 41 31 30 " #${PR_NUM}" ;;
-    *) seg 100 90 37 " #${PR_NUM}" ;;
+    *) seg 100 90 30 " #${PR_NUM}" ;;
   esac
 fi
 

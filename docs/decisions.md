@@ -883,3 +883,83 @@ syntax passes locally and fails in CI, and the fix is to pin Compose in the
 workflow rather than take the runner's. Beyond that, reversing this ruling means
 reinstalling Docker Desktop and enabling WSL integration, which is a download
 and two clicks; nothing here is one-way.
+
+## After the look -- decisions taken when appearance was measured rather than judged
+
+A fourth situation. The environment worked and had never been looked at as a
+thing to read. The request was for it to be beautiful and modern; what it turned
+out to need was a contrast measurement, and everything below came out of running
+one instead of collecting screenshots.
+
+Ruling R40: the colour scheme deviates from canonical Catppuccin Mocha in three
+values so that every pair this environment paints clears WCAG AA, and it is
+renamed "Catppuccin Mocha (AA)" to say so.
+
+Measured first, against the scheme's own background: fourteen of the sixteen
+ANSI colours clear 7:1, and the two that do not are the greys -- surface1 at
+1.80:1 and surface2 at 2.46:1. That looked like a small defect until the pairs
+were read out of statusline.sh, which is the file that decides what is actually
+painted. brightBlack is the single slot this whole environment means by
+"dimmed": the statusline's labels and separators, starship's fill and duration,
+git's hints. All of it was rendering at 2.46:1, which is below AA on the text
+most often read at a glance.
+
+The fix is not a fix to one colour, because brightBlack carries two opposite
+jobs -- it is dimmed text AND the background of the git segment. Raising it for
+the first breaks the second: white ink on overlay2 measures 1.59:1, worse than
+the problem being solved. So the ink inverts to ANSI black, which is what every
+other segment already used, and black drops from surface1 to base to be a better
+ink on all of them. Worst pair in the statusline goes from 2.46:1 to 5.81:1, and
+selectionBackground moves surface2 -> surface1 on the way past, 4.62 -> 6.31:1.
+
+Every replacement is another colour from Catppuccin's own ramp. Nothing here is
+invented, and the name carries "(AA)" because the result is no longer canonical
+and a scheme that claims to be Catppuccin should be Catppuccin.
+
+adjustIndistinguishableColors is set to "indexed" as a net, not as the design.
+The header of windows/terminal/settings.json used to record minimum-contrast as
+having "no counterpart" in Windows Terminal. That was wrong -- the counterpart
+exists under a different name, confirmed in both schemas/windows-terminal.json
+and the live upstream schema before the line was changed. It is the kind of note
+that is true when written and nobody re-reads.
+
+check.sh gained "the scheme is readable where this environment paints", which
+reads the seg calls out of statusline.sh, maps the ANSI codes back through the
+scheme and measures each pair. The schema check beside it validates that every
+value is a colour and has no opinion about whether any of them can be read. Same
+argument as the one-nerd-font check: two files that have to agree and nothing
+but a check to notice when they stop. Broken on purpose from both sides before
+being trusted -- reverting brightBlack reproduces the original 2.46:1, and
+reverting the ink reports 1.59:1.
+
+Cost if wrong: the scheme stops matching a canonical Catppuccin anywhere else it
+is used, which is the point of the rename. Reversing it is three hex values and
+one ink code, and check.sh will say which.
+
+Ruling R41: the Mac parity is dropped as a requirement. Font size and cell
+height are chosen for this display, and the tab row is themed.
+
+windows/terminal/settings.json was written as a port of the Mac's Ghostty
+config, and every appearance value carried a comment deriving it from a Ghostty
+setting. That parity was worth having while the two machines were used together
+and is now just a constraint with no one on the other end of it. size 14 and
+cellHeight 134% both came from it; on a 100%-DPI display, verified as
+AppliedDPI 0x60 rather than assumed, they read as oversized. 12 and 120%, and
+120% is roughly the font's natural line height rather than a number composed
+from a setting on another machine.
+
+The font itself does not move. JetBrains Mono is not what is failing here, and
+changing it would drag windows/configuration.winget, both VS Code keys and a
+reinstall on the host for no measured gain.
+
+themes[] was empty, which is why an otherwise themed terminal still read as a
+stock one: a colour scheme paints the panes and never the chrome above them.
+frame and unfocusedFrame would colour the window border too and are absent on
+purpose -- they are Windows Terminal Preview only, and this machine runs the
+stable package. useMica is off for a stated reason rather than an omission:
+Mica is drawn under the whole window including the panes and cannot coexist with
+the unblurred transparency profiles.defaults asks for.
+
+Cost if wrong: all of it is cosmetic and reversible in one file. The one thing
+that would not be caught by a check is taste, which is why the sizes are
+recorded here with what they were derived from.
