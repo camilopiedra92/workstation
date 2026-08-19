@@ -685,10 +685,19 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 #   ':!*.md'          markdown is prose. This check guards config and code,
 #                     where an assumption is executed rather than described.
 #   ':!check.sh'      this file necessarily contains the pattern it searches for.
-#   '"Read(/mnt/c'    a deny rule REFUSES the path rather than assuming it. Kept
+#   '"Read(//mnt/c'   a deny rule REFUSES the path rather than assuming it. Kept
 #                     to that exact string so a permissive entry -- an
 #                     additionalDirectories pointing at /mnt/c, say -- still
 #                     fires in the same file.
+#
+#                     The double slash is required, and excusing only that form
+#                     is deliberate. A deny rule written `Read(/mnt/c/...)` with
+#                     one slash resolves relative to the settings directory and
+#                     cannot fire, which is how twenty inert rules sat in this
+#                     repo looking like protection (R36). Written this way, a
+#                     regression to the single-slash form is not excused here and
+#                     fails this check -- so the mistake now has two independent
+#                     ways to be caught rather than none.
 #   'mnt/c/Windows/System32/'  reaching a Windows system binary by absolute path
 #                     is not the same as treating /mnt/c as a working path.
 #                     drift.sh needs cmd.exe to reach winget.exe, because
@@ -700,7 +709,7 @@ no_mnt_c() {
   local hits
   hits=$(git grep -nI 'mnt/c' -- . ':!*.md' ':!check.sh' |
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' |
-    grep -vE '"Read\(/mnt/c' |
+    grep -vE '"Read\(//mnt/c' |
     grep -vE 'mnt/c/Windows/System32/' || true)
   [ -z "$hits" ] || {
     echo "$hits"
@@ -775,17 +784,29 @@ deny = json.load(open('wsl/claude/settings.json', encoding='utf-8'))['permission
 
 # One template per category, both forms built from it, so a tenth category is
 # one line and cannot arrive with only one of its two forms.
+#
+# The leading DOUBLE slash is the whole point of this check, and it is not a
+# typo. In a permission rule a single leading slash is relative to the settings
+# file's own directory, so `Read(/mnt/c/...)` resolves under ~/.claude/ and can
+# never match anything. Two slashes mean the filesystem root. These rules shipped
+# with one slash and were inert -- proven on 2026-08-18 by reading a probe file
+# inside a supposedly denied directory, which succeeded, and denied immediately
+# once the rule was rewritten with two. See R36.
+#
+# This check passed throughout, because it compared the settings file against
+# templates carrying the same mistake. Asserting a rule is present is not
+# asserting it can fire.
 templates = [
-    '/mnt/c/Users/{}/.ssh/**',
-    '/mnt/c/Users/{}/.aws/**',
-    '/mnt/c/Users/{}/.azure/**',
-    '/mnt/c/Users/{}/.docker/config.json',
-    '/mnt/c/Users/{}/.git-credentials',
-    '/mnt/c/Users/{}/.claude/.credentials.json',
-    '/mnt/c/Users/{}/AppData/Roaming/gh/hosts.yml',
-    '/mnt/c/Users/{}/AppData/Roaming/npm/**',
-    '/mnt/c/Users/{}/AppData/Roaming/gcloud/**',
-    '/mnt/c/Users/{}/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt',
+    '//mnt/c/Users/{}/.ssh/**',
+    '//mnt/c/Users/{}/.aws/**',
+    '//mnt/c/Users/{}/.azure/**',
+    '//mnt/c/Users/{}/.docker/config.json',
+    '//mnt/c/Users/{}/.git-credentials',
+    '//mnt/c/Users/{}/.claude/.credentials.json',
+    '//mnt/c/Users/{}/AppData/Roaming/gh/hosts.yml',
+    '//mnt/c/Users/{}/AppData/Roaming/npm/**',
+    '//mnt/c/Users/{}/AppData/Roaming/gcloud/**',
+    '//mnt/c/Users/{}/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt',
 ]
 need = []
 for p in templates:

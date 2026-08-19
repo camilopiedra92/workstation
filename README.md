@@ -301,6 +301,22 @@ already protects: SSH and AWS credentials, the Azure and gcloud directories,
 credentials on the host, `.git-credentials`, and PowerShell's PSReadLine
 history.
 
+**Every one of those is written with a leading double slash**, as
+`Read(//mnt/c/Users/...)`, and that is load-bearing rather than cosmetic. In a
+permission rule a single leading slash is relative to the settings file's own
+directory, so `Read(/mnt/c/...)` resolves under `~/.claude/` and matches nothing
+that exists. These rules shipped with one slash. They were inert for as long as
+they existed, and the check written to police them compared the settings file
+against templates carrying the identical mistake -- so it reported the host as
+covered throughout.
+
+What found it was Task 12 Step 5, which is the only step in this repo that tests
+a rule by trying to violate it. A probe file placed inside a denied directory was
+read without complaint; the same read was refused the moment the rule was
+rewritten with two slashes. That is the fourth defect in this repo to live in a
+check rather than in the configuration it judges, and the first one that had a
+credential behind it.
+
 Two of those deserve their reasoning stated, because neither is derivable from
 the Mac's list:
 

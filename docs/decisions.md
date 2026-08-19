@@ -696,3 +696,51 @@ shims, the bare name will not resolve and that push fails. The absolute path
 would survive that case -- and fail the far more likely one, the first gh version
 bump, which bump-tools.sh performs on purpose. The runbook now checks for this
 with `git status` immediately after the command that causes it.
+
+Ruling R36: the twenty host deny rules are written with a leading double slash,
+and the check that polices them asserts that form specifically.
+
+They shipped with one slash, as `Read(/mnt/c/Users/...)`. In a Claude Code
+permission rule a single leading slash is relative to the settings file's own
+directory, so those rules resolved under `~/.claude/mnt/c/...` and could never
+match anything. They were inert from the day they were written until Task 12
+Step 5 tested one, and Step 5 is the only step in this repo that tests a rule by
+attempting to violate it.
+
+Proven rather than reasoned. A harmless probe file was placed inside a denied
+directory and read with the Read tool: it came back clean, no denial. The
+identical read was refused -- "File is in a directory that is denied by your
+permission settings" -- the moment the same rule was rewritten with two slashes,
+with nothing else changed. A second, unrelated rule behaved the same way, and a
+Linux-side rule written with `~/` had been denying correctly all along, which is
+what localised the fault to the path form rather than to the permission engine.
+
+The check is the second half of this ruling and the more important half. `check.sh`
+built its expectations from templates that carried the same single slash, so it
+compared a broken file against a broken expectation and reported the host as
+covered on every run since the rules existed. Both were corrected together, and
+the `no file assumes /mnt/c` exclusion now excuses only the double-slash form --
+so a regression to the inert spelling fails a second, independent check rather
+than passing quietly. That was verified by feeding both spellings through the
+filter and confirming only the inert one survives.
+
+Two things this exposed about testing a deny rule, both now in the runbook:
+
+The tool matters. Asked to "read" a path, the agent reached for Bash, and what
+refused it was the auto mode classifier -- a harness mechanism this repo does not
+declare, version or control. A refusal naming the classifier proves nothing about
+these rules, and reads exactly like success. The test must name the Read tool.
+
+The target matters. A credential-shaped path can be blocked by that same
+classifier before any rule is consulted, so the decisive probe is a harmless file
+placed inside a denied directory. It isolates the rule from everything else that
+might refuse.
+
+Cost if wrong: none identified. The double slash is what the permission syntax
+specifies for a filesystem-root path, the `~/` rules are unaffected, and both
+spellings were exercised against a live installation before this was written.
+
+This is the fourth defect in this repo to live in a check rather than in the
+configuration it judges, and the first with a credential behind it. The other
+three cost a red build. This one had been publishing the appearance of protection
+over a Windows host's SSH keys, cloud credentials, and Claude Code's own token.

@@ -90,46 +90,67 @@ divergences Task 8 corrects, and it is the one with a bill attached.
 
 This is the step that matters most, and it cannot be checked any other way.
 
-The deny rules covering the Windows host's credentials exist only in this repo —
-the Mac has no host to protect against. They have never been exercised.
+**It has already caught one live failure.** On 2026-08-18 every one of the twenty
+host rules was inert: they were written `Read(/mnt/c/...)` with one leading
+slash, which a permission rule reads as relative to the settings file's own
+directory. They matched nothing, and `check.sh` reported the host as covered
+throughout, because its expectations carried the same slash. See R36. The rules
+now start with `//`. This step is what found that, and it is the only reason it
+was ever found.
 
-**Test against files that exist.** This matters more than it sounds: asking the
-agent to read a path that is not there produces "file not found", which looks
-like a refusal and proves nothing. Four of the ten denied categories exist on
-this machine, so those give a decisive answer.
+So run it as written, and read the refusals rather than counting them.
 
-Inside a Claude session, one at a time:
+### Two ways this test lies to you
 
-```
-> read /mnt/c/Users/camilo.piedrahita/.claude/.credentials.json
-> read /mnt/c/Users/camilo.piedrahita/.docker/config.json
-> read /mnt/c/Users/camilo.piedrahita/AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
-```
+**The tool matters.** Ask an agent to "read" a path and it may reach for Bash —
+and a `cat` is stopped by the auto mode classifier, not by these rules. That
+refusal names the classifier, looks exactly like success, and proves nothing:
+the classifier is a harness mechanism this repo does not declare, version or
+control. Name the Read tool explicitly, and say not to use Bash.
 
-**All three must be refused, and the refusal must name the permission rule** —
-not "file not found", not empty output. The first is the pointed one: it is the
-Windows installation's own Claude Code credentials, which the agent replacing it
-would otherwise be able to read.
+**The target matters.** A path that looks like a credential can be refused by
+that same classifier before any rule is consulted — sometimes before the request
+even reaches the machine you are testing. So the decisive probe is a *harmless*
+file inside a denied directory. It isolates the rule from everything else that
+might refuse for its own reasons.
 
-### Then prove the glob matches, not just the literal
-
-Every rule is written twice, once with the user name spelled out and once with a
-`*`. The three above exercise the literal. To exercise the pattern, create a file
-where none exists:
-
-```bash
-mkdir -p /mnt/c/Users/camilo.piedrahita/.aws
-echo "probe-not-a-real-credential" > /mnt/c/Users/camilo.piedrahita/.aws/credentials
-```
-
-```
-> read /mnt/c/Users/camilo.piedrahita/.aws/credentials
-```
-
-Must be refused. Then remove it:
+### The probe
 
 ```bash
-rm -rf /mnt/c/Users/camilo.piedrahita/.aws
+u=/mnt/c/Users/camilo.piedrahita
+[ -e "$u/.azure" ] && echo "STOP: .azure exists, pick another denied dir" || {
+  mkdir -p "$u/.azure"
+  echo "harmless probe" > "$u/.azure/probe.txt"
+}
+```
+
+`Read(//mnt/c/Users/*/.azure/**)` covers it, in both the literal and the glob
+form. Then, inside a Claude session:
+
+```
+Use the Read tool on /mnt/c/Users/camilo.piedrahita/.azure/probe.txt.
+Answer only READ or DENIED plus the literal message. Do not use Bash.
+```
+
+**Expected:** `DENIED: File is in a directory that is denied by your permission
+settings.`
+
+Three outcomes and what each means:
+
+| What comes back | What it means |
+| --- | --- |
+| DENIED, naming your permission settings | The rule fired. This is the pass. |
+| DENIED, naming the auto mode classifier | Inconclusive. Something else refused; the rule was never consulted. |
+| READ | The rule did not fire. Stop and fix it before anything else. |
+
+### Then a second, unrelated rule
+
+One rule firing could be one rule firing. Repeat against a different category —
+a literal path rather than a glob:
+
+```
+Use the Read tool on /mnt/c/Users/camilo.piedrahita/.docker/config.json.
+Answer only READ or DENIED plus the literal message. Do not use Bash.
 ```
 
 ### And one negative control
@@ -139,21 +160,49 @@ refusing all of `/mnt/c` for an unrelated reason, and the deny rules could be
 doing none of the work.
 
 ```
-> read /mnt/c/Users/camilo.piedrahita/Development/workstation/README.md
+Use the Read tool on /mnt/c/Users/camilo.piedrahita/Development/workstation/README.md.
+Answer only READ or DENIED plus the literal message. Do not use Bash.
 ```
 
 **This one must succeed.** If it is also refused, the earlier refusals were not
 the deny rules and the test told you nothing.
 
-### If any of this comes out wrong
+### Clean up
+
+```bash
+rm -rf /mnt/c/Users/camilo.piedrahita/.azure
+```
+
+### If a rule does not fire
 
 Report it rather than working around it. A rule that does not fire is worse than
 no rule: it reads as protection while providing none, and this is the only moment
 anyone will ever check.
 
+The first thing to check is the slash. The second is whether a Linux-side rule —
+`Read(~/.config/git/config.local)` is a good one, the file exists and its contents
+are dull — refuses correctly. If the `~/` rule fires and the `//mnt/c` one does
+not, the permission engine is working and the fault is in the path. If neither
+fires, the settings file is not being read at all.
+
 Note that `install.sh` disables Windows **PATH interop**, which is a different
 thing from the mount. `/mnt/c` remains fully readable. That is precisely why
 these rules exist.
+
+### What this step does not cover, and cannot
+
+These twenty rules are `Read(...)` rules. The repo's only `Bash(...)` deny rules
+guard destructive commands — `rm -rf`, force pushes, `filter-branch` — and none
+of them protects a credential path. A `cat` of a host credential file is not
+refused by anything in this repository.
+
+That is not an oversight to fix by adding `Bash(cat //mnt/c/...)`: a command-string
+rule is evaded by `head`, by `python -c`, by any of a hundred spellings, so such a
+rule would add the appearance of coverage without the substance — the exact
+failure this step exists to detect. What stops it today is the auto mode
+classifier, which belongs to the harness rather than to this repo. Write that down
+rather than papering over it: the deny list closes the Read path, and the Bash
+path is closed by something this repo neither owns nor can promise.
 
 ---
 
