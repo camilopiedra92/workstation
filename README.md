@@ -461,6 +461,38 @@ Every one was found by asking what the check actually inspects rather than
 whether it passes. Break a check on purpose before trusting it; a rule nobody
 has watched fail is a rule nobody should rely on.
 
+Two more arrived later and they invert the shape: not green while inspecting
+nothing, but red while explaining nothing. Both CI jobs had failed on every
+run this repo ever had, for reasons that had nothing to do with the files CI
+judges.
+
+- **zsh was never on the CI runner**, and the workflow's own comment asserted
+  it was. So `check.sh`'s zsh check failed under `--strict` every time — the
+  design working exactly as intended, reporting a hole in coverage — and
+  nothing downstream depended on the answer.
+- **The Windows job discarded the answer it was given.** `winget show` piped
+  its output to `Out-Null`, so when winget stopped to ask whether the msstore
+  source agreements were accepted — on a runner, with no stdin to answer
+  from — what reached the log was nine unresolvable package ids and no cause.
+  `Microsoft.WindowsTerminal` was among them, which is the tell that the ids
+  were never the problem. `bootstrap.ps1` had carried the fix for this exact
+  class since the day it was written: `--accept-configuration-agreements`, one
+  command over.
+
+So the rule those first four produce needs its other half: **a check must
+report what it saw, not only its verdict.** A red check that names no cause
+costs the same investigation as no check at all, and buys a false sense that
+something is being watched.
+
+Which is the third finding, and it is not about a check but about what was
+enforcing them: **nothing was.** *Changing something*, below, described a
+default branch that takes no direct pushes; GitHub answered `404 Branch not
+protected`, with no rulesets at all. Every commit on `main` went in directly,
+CI ran afterwards, and it was red on all five. The paragraph describing the
+protection was the only thing providing it — R36's shape one layer up, and
+the reason the two failures above survived from the first commit: no merge
+ever depended on them.
+
 ### When a check produces a false positive
 
 The cleanest lesson of the build, and the one most likely to be repeated.
@@ -755,10 +787,18 @@ fact, until something checks it.
 
 ## Changing something
 
-The default branch does not take direct pushes. Everything goes through a pull
-request that CI has to pass first: pushing straight to it runs the checks
-*after* the commit is already in, so a failure means the branch is already
-broken.
+The default branch does not take direct pushes, and that is now a GitHub
+ruleset rather than a sentence in this file: a pull request is required,
+`ubuntu-checks` and `windows-checks` must both pass, and force-pushes and
+deletion are refused. Nobody bypasses it, this repo's owner included. Getting
+around it means disabling it, which is deliberate and leaves a record — the
+same standard `githooks/pre-push` sets for a rewrite, and the whole difference
+between a rule and an intention.
+
+This paragraph said all of it before any of it was true. Five commits reached
+`main` directly, each running CI *after* the commit was already in — which is
+the failure the sentence claims to prevent — and CI was red on every one.
+Everything goes through a pull request that CI has to pass first.
 
 ```bash
 git switch -c what-youre-doing

@@ -744,3 +744,84 @@ This is the fourth defect in this repo to live in a check rather than in the
 configuration it judges, and the first with a credential behind it. The other
 three cost a red build. This one had been publishing the appearance of protection
 over a Windows host's SSH keys, cloud credentials, and Claude Code's own token.
+
+
+## After the machine -- decisions taken once the gates were made to run
+
+A third situation, and the last one so far. The repo was complete, applied to
+the machine and reviewed, and its own CI had never passed once. These came out
+of making it pass.
+
+Ruling R37: CI installs zsh from apt, and both winget checks pass
+--accept-source-agreements --disable-interactivity and print what winget said
+when a call fails.
+
+Both jobs had failed on every run this repository ever had, and neither
+failure was about the files being checked. zsh is not on the ubuntu-latest
+image, though the workflow's own comment asserted it was, so check.sh's zsh
+check failed under --strict every time -- the design working correctly, since
+a missing tool is a hole in coverage rather than a neutral third outcome. And
+winget stops on the msstore source agreements the first time it is used; a
+runner has no stdin to answer with, so every id came back 0x8a150042 "Error
+reading input in prompt", exit -1978335166. Microsoft.WindowsTerminal was
+among them, which is the tell that the ids were never the problem.
+
+zsh comes from apt and unpinned, unlike the four linters CI downloads by
+checksum. Those are pinned so CI and the host reach the same verdict on the
+same file, and there is an artifact and a hash to pin them with; zsh publishes
+neither, and apt is the source wsl/apt-packages.txt already names. Measured
+rather than assumed: 5.9 on the runner, 5.9 on the machine.
+
+The second half is the one worth keeping. Both calls sent winget's output to
+Out-Null, so the question winget was asking never reached the log and the job
+reported nine unresolvable ids while naming no cause. bootstrap.ps1 has
+carried the fix for this exact class since the day it was written --
+--accept-configuration-agreements -- and the lesson simply never reached CI.
+A check has to report what it saw, not only its verdict.
+
+Verified by breaking it on purpose on a throwaway branch, because a check
+nobody has watched fail is a check nobody should rely on: a nonexistent id
+exits -1978335212, a nonexistent version -1978335209, and a real pin
+(koalaman.shellcheck 0.11.0) exits 0. Recorded because the four Windows steps
+after the failing one had never executed at all -- the DSC gallery lookup, the
+version check and both PSScriptAnalyzer steps ran for the first time here.
+
+Also found and left alone: the comment above the PSScriptAnalyzer step cites
+Windows2022-Readme.md, while the runner now reports Image: windows-2025-vs2026.
+It costs nothing today because that step installs its own pinned version, but
+it is a citation to an image that no longer runs.
+
+Cost if wrong: CI installs one apt package it might one day ship with, and two
+winget calls carry flags an interactive session would not need. Against that,
+every check in this repo was reporting into a room nobody was in.
+
+Ruling R38: main is protected by a GitHub ruleset with no bypass, rather than
+by the README's description of one. User approved, having been shown that the
+protection did not exist.
+
+The README stated that the default branch takes no direct pushes and that
+everything goes through a pull request CI has to pass first. GitHub answered
+404 "Branch not protected", with no rulesets configured at all. All five
+commits on main had gone in directly, CI ran after each one, and it was red
+every time.
+
+That is R36's shape one layer up: a configuration that reads as protection
+while providing none. It is also why R37's failures survived from the first
+commit -- no merge ever depended on them, so nothing ever had to be green.
+
+The ruleset requires a pull request at zero approvals, since the owner works
+alone and demanding a second reviewer would lock the repository rather than
+guard it; requires ubuntu-checks and windows-checks, with the branch up to
+date so they run against what actually lands; and refuses force-pushes and
+deletion. No bypass for any role, the owner included -- the alternative leaves
+the README's sentence false for precisely the person most likely to push
+directly. Getting past it means disabling it, which is deliberate and leaves a
+record, the same standard githooks/pre-push sets for a rewrite.
+
+Tested rather than trusted, in both directions: a direct push of a throwaway
+empty commit to main was refused with GH013, naming both rules; and this
+change went in through a pull request once both checks were green.
+
+Cost if wrong: an emergency fix needs a pull request, or one deliberate
+disable that is visible afterwards. On a repository whose whole subject is
+that a declaration should mean what it says, that is the cheaper side.
