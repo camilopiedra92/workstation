@@ -865,8 +865,9 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 #   ':!*.md'          markdown is prose. This check guards config and code,
 #                     where an assumption is executed rather than described.
 #   ':!check.sh'      this file necessarily contains the pattern it searches for.
-#   '"Read(//mnt/c'   a deny rule REFUSES the path rather than assuming it. Kept
-#                     to that exact string so a permissive entry -- an
+#   '"(Read|Write|Edit|NotebookEdit)(//mnt/c'
+#                     a deny rule REFUSES the path rather than assuming it. Kept
+#                     to those exact strings so a permissive entry -- an
 #                     additionalDirectories pointing at /mnt/c, say -- still
 #                     fires in the same file.
 #
@@ -885,11 +886,18 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 #                     Scoped to System32 rather than to drift.sh: that file is
 #                     the likeliest place a real /mnt/c assumption would appear,
 #                     so it must stay visible to this check.
+#   'guard-bash.sh:...grep -Eq'  the guard's match patterns exist to refuse the
+#                     path, the same category as a deny rule. Scoped to the
+#                     grep lines rather than to the file: a blocking pattern
+#                     lives on a `grep -Eq` line by construction, so a real
+#                     assumption in guard-bash.sh -- a path used as a path --
+#                     still fires here.
 no_mnt_c() {
   local hits
   hits=$(git grep -nI 'mnt/c' -- . ':!*.md' ':!check.sh' |
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' |
-    grep -vE '"Read\(//mnt/c' |
+    grep -vE '"(Read|Write|Edit|NotebookEdit)\(//mnt/c' |
+    grep -vE 'wsl/claude/guard-bash\.sh:[0-9]+:.*grep -Eq' |
     grep -vE 'mnt/c/Windows/System32/' || true)
   [ -z "$hits" ] || {
     echo "$hits"
@@ -1024,6 +1032,106 @@ sys.exit(1 if 'effortLevel' in s else 0)
   }
 }
 check "effortLevel is absent on purpose" no_effort_level
+
+# --- The guard hook ----------------------------------------------------------
+# The "never" rules that name concrete commands are enforced by a PreToolUse
+# hook rather than by prose in CLAUDE.md, because a prompted rule is advisory
+# and its compliance decays as a session grows while a hook does not (R43).
+# Three things can silently break that arrangement: the hook stops being wired
+# in settings.json, the tool-level denies disappear, or a regex drifts and the
+# guard starts over- or under-matching. One check per failure mode.
+
+guard_hook_wired() {
+  "$PYTHON" - << 'PY'
+import json, sys
+s = json.load(open('wsl/claude/settings.json', encoding='utf-8'))
+for entry in s.get('hooks', {}).get('PreToolUse', []):
+    if entry.get('matcher') == 'Bash':
+        if '~/.claude/guard-bash.sh' in [h.get('command') for h in entry.get('hooks', [])]:
+            sys.exit(0)
+print('settings.json does not wire guard-bash.sh as a PreToolUse hook on Bash')
+sys.exit(1)
+PY
+}
+check "guard-bash is wired as a PreToolUse hook" guard_hook_wired
+
+# The double slash is load-bearing: a single-slash rule resolves relative to
+# the settings directory and can never fire (R36).
+mnt_c_write_denied() {
+  "$PYTHON" - << 'PY'
+import json, sys
+deny = json.load(open('wsl/claude/settings.json', encoding='utf-8'))['permissions']['deny']
+need = ['Write(//mnt/c/**)', 'Edit(//mnt/c/**)', 'NotebookEdit(//mnt/c/**)']
+missing = [r for r in need if r not in deny]
+if missing:
+    print('missing /mnt/c write denies (double-slash form): %s' % ', '.join(missing))
+    sys.exit(1)
+PY
+}
+check "every tool that writes files is denied /mnt/c" mnt_c_write_denied
+
+# Both lists matter equally. The blocked list is each rule watched failing; the
+# allowed list is what keeps a later "hardening" from quietly widening a
+# pattern until legitimate commands stop running -- 'uv pip install' shares a
+# substring with what the pip rule blocks, and copying FROM /mnt/c is a
+# legitimate read crossing that must survive the rule about writing TO it.
+guard_bash_verdicts() {
+  local cmd rc
+  local blocked=(
+    'pip install requests'
+    'pip3 install requests'
+    'cd /tmp && pip install foo'
+    'sudo pip install foo'
+    'PIP_INDEX_URL=x pip install foo'
+    'python -m pip install foo'
+    'python3.12 -m venv .venv'
+    'npm install -g typescript'
+    'npm i -g pnpm'
+    'npm add --global left-pad'
+    'echo hi > /mnt/c/Users/x/f.txt'
+    'cat a >> /mnt/c/tmp/log'
+    'cp ~/a.txt /mnt/c/Users/x/a.txt'
+    'mv build /mnt/c/out'
+    'ls | tee /mnt/c/x.txt'
+    'sed -i s/a/b/ /mnt/c/f'
+    'mkdir -p /mnt/c/newdir'
+    'rm /mnt/c/Users/x/f'
+    'dd of=/mnt/c/img'
+  )
+  local allowed=(
+    'uv pip install requests'
+    'uv venv'
+    'npm install'
+    'npm ls -g'
+    'npm install --save-dev typescript'
+    'pip list'
+    'cp /mnt/c/Users/x/a.txt ~/dest.txt'
+    'ls /mnt/c/Users'
+    'cat /mnt/c/win.txt > /tmp/copy.txt'
+    '/mnt/c/Windows/System32/cmd.exe /c echo hi'
+    'echo "never pip install globally" >> notes.md'
+    'git commit -m "stop using npm i -g"'
+  )
+  for cmd in "${blocked[@]}"; do
+    rc=0
+    printf '%s' "$cmd" | jq -Rs '{tool_input:{command:.}}' |
+      ./wsl/claude/guard-bash.sh > /dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 2 ] || {
+      echo "must block (exit 2), got $rc: $cmd"
+      return 1
+    }
+  done
+  for cmd in "${allowed[@]}"; do
+    rc=0
+    printf '%s' "$cmd" | jq -Rs '{tool_input:{command:.}}' |
+      ./wsl/claude/guard-bash.sh > /dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ] || {
+      echo "must allow (exit 0), got $rc: $cmd"
+      return 1
+    }
+  done
+}
+check "guard-bash blocks what it claims and allows the lookalikes" guard_bash_verdicts
 
 # ── Statusline behaviour ─────────────────────────────────────────────────────
 # These are pure functions from a JSON payload to a line of text, which makes

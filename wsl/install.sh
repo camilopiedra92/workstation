@@ -133,6 +133,7 @@ link "$WSL_DIR/git/config" "$XDG_CONFIG_HOME/git/config"
 link "$WSL_DIR/git/ignore" "$XDG_CONFIG_HOME/git/ignore"
 link "$WSL_DIR/claude/statusline.sh" "$HOME/.claude/statusline.sh"
 link "$WSL_DIR/claude/subagent-statusline.sh" "$HOME/.claude/subagent-statusline.sh"
+link "$WSL_DIR/claude/guard-bash.sh" "$HOME/.claude/guard-bash.sh"
 link "$WSL_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 
 # git reads ~/.gitconfig AND ~/.config/git/config, and the legacy file wins. A
