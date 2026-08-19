@@ -1,8 +1,9 @@
 # Decisions taken while building this
 
-Thirty-two decisions were made on the owner's behalf during the build. Each is
-recorded here with what it decided, why, and **what it costs if it is wrong** —
-so any of them can be found, judged and reversed by someone who was not there.
+Every decision taken on the owner's behalf is recorded here, under the phase it
+was taken in. Each carries what it decided, why, and **what it costs if it is
+wrong** — so any of them can be found, judged and reversed by someone who was
+not there.
 
 This file exists because the working record that held them does not survive a
 clone. It lived under `.superpowers/`, which is git-ignored, while the runbooks
@@ -17,7 +18,13 @@ the machine itself — `useLatest` is the clearest example: the argument for
 leaving those packages unasserted was sound and the first real apply disproved
 it.
 
-The entries are in the order they were made. Numbering is the original.
+The entries are in the order they were made. Numbering is the original, and it
+is also the count. A total written out in prose is a second copy of the same
+fact with nothing holding the two together: the one that stood here said
+thirty-two, which matched neither the thirty-one rulings in the file when it
+was written nor any number it has held since. This paragraph carries no total
+for the same reason, and the first draft of it did -- it said "thirty-six now",
+and two rulings landed before it was ever merged.
 
 ---
 
