@@ -1099,3 +1099,28 @@ false positive goes in beside the fix. Runtime cost is measured above, on
 this machine, not predicted. Known accepted gaps, in the hook's own header: a
 deliberately quoted evasion (bash -c "pip install x"), and cd into /mnt/c
 followed by a relative write -- the guard aims at habit, not adversaries.
+
+Ruling R44: CLAUDE.md's procedural content moves to four skills --
+starting-a-project, delegating-and-reviewing, frontend-verification,
+data-migrations -- added BESIDE the prose first, contracted out of it after.
+Expand and contract, applied to configuration: at no point does a procedure
+live nowhere.
+
+Why skills and why these four: a user-level CLAUDE.md is loaded into every
+session in every project, and pays its context cost whether or not the
+session needs it. The migration ceremony is irrelevant to a frontend session;
+the screenshot loop is irrelevant to a backend one. A skill's body loads only
+when its description matches the task, which is the vendor's own placement
+rule ("avoid procedural instructions in CLAUDE.md -- use skills instead").
+What stays in CLAUDE.md is what every session needs: the calibration rules,
+the invariants, and pointers. The skills directory is linked whole so a new
+skill is one directory in the repo, not a directory plus an install.sh line
+that can drift; check.sh asserts each skill's name matches its directory and
+its description is non-empty, because a skill whose frontmatter is wrong does
+not error -- it just never fires.
+
+Cost if wrong: a procedure the model should have seen does not load because
+the description did not match the task. Mitigated the same way the vendor
+mitigates it: descriptions written as "Use when..." naming the concrete
+situations, and the CLAUDE.md pointers naming the skill beside the rule it
+expands.

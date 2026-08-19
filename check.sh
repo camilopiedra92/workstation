@@ -1167,6 +1167,37 @@ guard_bash_verdicts() {
 }
 check "guard-bash blocks what it claims and allows the lookalikes" guard_bash_verdicts
 
+# Skills load by their frontmatter: the model reads `description` to decide
+# when a skill fires, and `name` is the skill's identity. A name that does not
+# match its directory, or an empty description, fails silently -- the skill
+# just never loads, and nothing else would notice.
+skills_frontmatter() {
+  local f dir name desc status=0
+  for f in wsl/claude/skills/*/SKILL.md; do
+    [ -e "$f" ] || {
+      echo "no skills found under wsl/claude/skills"
+      return 1
+    }
+    dir=$(basename "$(dirname "$f")")
+    head -1 "$f" | grep -q '^---$' || {
+      echo "$f: does not open with frontmatter"
+      status=1
+    }
+    name=$(sed -n 's/^name: *//p' "$f" | head -1)
+    desc=$(sed -n 's/^description: *//p' "$f" | head -1)
+    [ "$name" = "$dir" ] || {
+      echo "$f: name '$name' does not match its directory '$dir'"
+      status=1
+    }
+    [ -n "$desc" ] || {
+      echo "$f: description is empty, so the skill can never fire"
+      status=1
+    }
+  done
+  return "$status"
+}
+check "every skill names itself and says when to fire" skills_frontmatter
+
 # ── Statusline behaviour ─────────────────────────────────────────────────────
 # These are pure functions from a JSON payload to a line of text, which makes
 # them the one thing here that can be tested properly.

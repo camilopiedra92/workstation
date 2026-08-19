@@ -135,6 +135,10 @@ link "$WSL_DIR/claude/statusline.sh" "$HOME/.claude/statusline.sh"
 link "$WSL_DIR/claude/subagent-statusline.sh" "$HOME/.claude/subagent-statusline.sh"
 link "$WSL_DIR/claude/guard-bash.sh" "$HOME/.claude/guard-bash.sh"
 link "$WSL_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+# The skills directory is linked whole, not per file: a new skill is then one
+# directory in the repo rather than a directory plus a line here, and the two
+# cannot drift.
+link "$WSL_DIR/claude/skills" "$HOME/.claude/skills"
 
 # git reads ~/.gitconfig AND ~/.config/git/config, and the legacy file wins. A
 # leftover there means the linked config is read and then overruled.
