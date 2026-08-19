@@ -1224,6 +1224,22 @@ else
   skip "every skill names itself and says when to fire" "python3/pyyaml not installed"
 fi
 
+# CLAUDE.md's contract says its HTML comments are stripped before injection.
+# That is true only of comments starting at column 0 -- measured in the PR #11
+# review with two claude -p runs: a comment indented under a list item was
+# reproduced verbatim from the loaded context, a column-0 one was absent. An
+# indented comment is therefore injected as instruction text, silently, which
+# is exactly the class of rule this file keeps as a check.
+claude_md_comments_column0() {
+  local hits
+  hits=$(grep -nE '^[[:space:]]+<!--' wsl/claude/CLAUDE.md || true)
+  [ -z "$hits" ] || {
+    echo "indented HTML comments are injected, not stripped: $hits"
+    return 1
+  }
+}
+check "CLAUDE.md comments sit at column 0, where stripping works" claude_md_comments_column0
+
 # ── Statusline behaviour ─────────────────────────────────────────────────────
 # These are pure functions from a JSON payload to a line of text, which makes
 # them the one thing here that can be tested properly.

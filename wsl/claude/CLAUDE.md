@@ -26,10 +26,11 @@ decomposition one model generation after building it. -->
 
 ## The Windows boundary
 
-Ubuntu under WSL2 on a Windows host. Work lives on ext4 (`~/Development`);
-`/mnt/c` is 9-20x slower, and writing to it is blocked mechanically -- deny
-rules for Write/Edit, guard-bash.sh for Bash. A denial naming the guard is
-policy working, not a malfunction. Reading and copying FROM `/mnt/c` is fine.
+Ubuntu under WSL2 on a Windows host. Never write to `/mnt/c`: work lives on
+ext4 (`~/Development`), 9-20x faster. Mechanisms back the rule -- deny rules
+for Write/Edit/NotebookEdit, guard-bash.sh for Bash -- and a denial naming
+the guard is policy working, not a malfunction; where the guard's net has a
+gap, the rule still holds. Reading and copying FROM `/mnt/c` is fine.
 
 Windows PATH interop is off on purpose (`appendWindowsPath = false` in
 /etc/wsl.conf). Never assume a Windows binary is on PATH: the ones this
@@ -69,6 +70,9 @@ and the batch is where the risk lives.
 - If a command can settle a claim, run it first; say plainly when something
   cannot be determined from here. Break every new check on purpose once:
   a check nobody has watched fail is a check nobody should rely on.
+- Backend logic is the easy case: input, output and state can nearly all be
+  asserted, so a failing test first pays in full there. The less a domain
+  can assert, the more the loop leans on looking.
 
 **Keep the batch small.**
 
@@ -76,8 +80,12 @@ and the batch is where the risk lives.
   the feature is done. Vertical slices over horizontal layers, with a
   contract test on each seam.
 - Keep one review unit under ~400 changed lines; past that, split it.
-  <!-- Justified by detection quality, NOT review speed: defect detection
-  collapses with diff size while latency barely moves. -->
+
+<!-- The ~400 threshold is justified by detection quality, NOT review speed:
+defect detection collapses with diff size while latency barely moves.
+Sources in docs/decisions.md, R43/R44 completion note. Comments in this file
+must start at column 0 -- Claude Code strips only column-0 blocks before
+injection, and check.sh asserts it. -->
 
 **Review before every merge, however small.** A blocker must be able to
 mean "do not merge", not "follow-up on main". Delegate the review to clean
@@ -112,8 +120,9 @@ independent attempts, compared, earn their cost.
 against what is already configured here. Deleting a line is a valid answer
 and often the right one.
 
-Group everything that needs deciding into one question up front. Where a
-plan and its spec disagree, the later measurement wins.
+Group everything that needs deciding into one question up front. Before a
+plan's first task, read its spec and compare their dates; where they
+disagree, the later measurement wins.
 
 Do not create files nobody asked for: no READMEs, summaries or
 "implementation notes".

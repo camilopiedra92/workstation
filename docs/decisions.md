@@ -1176,17 +1176,39 @@ absolute rule guarded against. The skill's wording makes the partition page
 the precondition, and the default remains one writer.
 
 R43/R44 -- the contraction landed. CLAUDE.md went from 253 lines of prose to
-128 (about 105 after the HTML comments are stripped at injection): machine
-facts, rules with a command or threshold attached, and pointers to the four
-skills and the guard. Three additions the research asked for and the old
-file lacked: the verification loop as a first-class section (a runnable
-check per task, evidence over claims, implementer-greened tests as weak
-evidence), session hygiene (two failed corrections means a fresh session;
-scope or delegate investigations), and an audit stamp dating the file's
-assumptions with a re-audit due by 2027-02. One correction of record: small
-review units are justified by detection quality, not review speed -- size
-barely correlates with latency, and the old justification quietly claimed
-otherwise. The PR #10 re-review's acceptance criteria for this change --
-batch-small, vertical slices with a contract test on the seam, and
-spec-vs-plan dates all surviving the contraction -- are each in the
-contracted file.
+137 total, 119 injected -- measured by deleting the column-0 comment blocks
+(awk over the file) after the PR #11 review established, with two claude -p
+runs against a fixture, that ONLY column-0 comments are stripped: an
+indented one is injected as instruction text. check.sh now asserts no
+comment in the file is indented. The first draft of this note said "about
+105" and a later one said 122, both counted rather than measured; corrected
+to the measured number for the same reason R17 exists.
+
+Contents: machine facts, rules with a command or threshold attached, and
+pointers to the four skills and the guard. Three additions the old file
+lacked, with their provenance: the verification loop as a first-class
+section (a runnable check per task, evidence over claims, implementer-
+greened tests as weak evidence -- the vendor's top-billed practice, plus
+the measured 30%+ reward-hacking rates in RE-Bench/CapCode); session
+hygiene (the vendor's stated two-corrections threshold -- "a clean session
+with a better prompt almost always outperforms a long session with
+accumulated corrections" -- independently converged on by HumanLayer's
+ACE-FCA, which restarts bad research rather than iterating on it; and the
+vendor's "infinite exploration" failure mode, fixed by scoping or
+delegating); and an audit stamp dating the file's assumptions, re-audit due
+2027-02.
+
+The review-unit threshold, sourced since a bare number is an assertion: the
+SmartBear/Cisco study (2006, ~2,500 reviews) found 200-400 LOC per session
+with 70-90% defect discovery, and Google's small-CL guidance arrived at the
+same range independently -- a single old industrial study, corroborated in
+direction, which is why the file says "~400" and not a precision it does
+not have. The speed half: PR size correlates with review LATENCY at
+r = 0.004-0.095 (arXiv:2108.09946), so "small reviews faster" is the wrong
+justification; detection quality is the right one. The old text already
+argued detection in two of its three clauses -- only "expensive" read as
+cost -- so this is a sharpening of record, not a reversal.
+
+The PR #10 re-review's acceptance criteria for this change -- batch-small,
+vertical slices with a contract test on the seam, and spec-vs-plan dates
+all surviving the contraction -- are each in the contracted file.
