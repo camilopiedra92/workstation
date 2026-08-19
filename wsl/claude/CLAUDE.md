@@ -21,12 +21,15 @@ Never write to `/mnt/c`. Repositories and build output live on ext4 under
 `~/Development`, where they are an order of magnitude faster. `/mnt/c` is
 reachable, and being reachable is exactly what makes it a trap.
 
-Never assume a Windows binary is on `PATH`. Windows interop is disabled in
-`/etc/wsl.conf` deliberately: it puts the whole Windows `PATH` into every shell,
-where every file is executable as far as Linux is concerned, so a Windows shim
-found there executes a Windows script inside Linux. The Windows commands this
-environment calls are aliased individually in `.zshrc`. If something needs one
-that is not there, add the alias -- do not re-enable interop.
+Never assume a Windows binary is on `PATH`. Windows PATH interop is off in
+`/etc/wsl.conf` -- `appendWindowsPath = false`, and only that: interop itself
+stays on, which is what lets `drift.sh` call `cmd.exe` and the `explorer`/`clip`
+aliases work at all. With the Windows `PATH` on, every shell inherits it, and
+every file under `/mnt/c` is executable as far as Linux is concerned, so a
+Windows shim found there executes a Windows script inside Linux. The Windows
+commands this environment calls are aliased individually in `.zshrc`. If
+something needs one that is not there, add the alias -- do not put the Windows
+`PATH` back.
 
 When something genuinely must cross the boundary, cross it explicitly and say
 so in the commit message. A crossing nobody wrote down is the one that breaks on
