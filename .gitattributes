@@ -1,5 +1,6 @@
-# This repo is authored on Windows and consumed on Linux. That direction is the
-# whole reason this file exists.
+# This repo is authored on ext4 under WSL and cloned on Windows too -- step 1
+# of the install runs .\windows\bootstrap.ps1 from a host checkout. That second
+# copy is the whole reason this file exists.
 #
 # Git for Windows ships core.autocrlf=true in its system gitconfig
 # (C:/Program Files/Git/etc/gitconfig), which converts on the way in and out
