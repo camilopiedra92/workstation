@@ -865,7 +865,7 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 #   ':!*.md'          markdown is prose. This check guards config and code,
 #                     where an assumption is executed rather than described.
 #   ':!check.sh'      this file necessarily contains the pattern it searches for.
-#   '"(Read|Write|Edit|NotebookEdit)(//mnt/c'
+#   '"(Read|Edit)(//mnt/c'
 #                     a deny rule REFUSES the path rather than assuming it. Kept
 #                     to those exact strings so a permissive entry -- an
 #                     additionalDirectories pointing at /mnt/c, say -- still
@@ -879,6 +879,15 @@ check "no .zprofile (the macOS problem it solved does not exist here)" no_zprofi
 #                     regression to the single-slash form is not excused here and
 #                     fails this check -- so the mistake now has two independent
 #                     ways to be caught rather than none.
+#
+#                     Read and Edit are the only two tool names a file rule is
+#                     matched against. `Write(...)` and `NotebookEdit(...)` name
+#                     real tools but are never consulted -- Claude Code resolves
+#                     all three file-editing tools against `Edit(...)` rules, and
+#                     says so at startup. They are not excused here, so writing
+#                     one fails this check as well as mnt_c_write_denied: R36's
+#                     two-independent-ways rule applied to the tool name, having
+#                     first been applied to the path form (R46).
 #   'mnt/c/Windows/System32/'  reaching a Windows system binary by absolute path
 #                     is not the same as treating /mnt/c as a working path.
 #                     drift.sh needs cmd.exe to reach winget.exe, because
@@ -897,7 +906,7 @@ no_mnt_c() {
   local hits
   hits=$(git grep -nI 'mnt/c' -- . ':!*.md' ':!check.sh' |
     grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' |
-    grep -vE '"(Read|Write|Edit|NotebookEdit)\(//mnt/c' |
+    grep -vE '"(Read|Edit)\(//mnt/c' |
     grep -vE 'wsl/claude/guard-bash\.sh:[0-9]+:(re_[a-z_]+=|[[:space:]]*\*pip\*)' |
     grep -vE 'mnt/c/Windows/System32/' || true)
   [ -z "$hits" ] || {
@@ -1061,15 +1070,26 @@ check "guard-bash is wired as a PreToolUse hook" guard_hook_wired
 # because no_mnt_c excuses the deny-rule spelling by string shape, which a
 # permissive entry would share: this is the check that actually reads which
 # array the string sits in.
+#
+# One rule covers all three file-editing tools, and the tool it must be named
+# after is Edit. This check asked for three rules until R46, because it built
+# its expectation from the same wrong model as the file it judges -- green on
+# every run while two of the three names it demanded were never consulted.
+# `Write(...)` and `NotebookEdit(...)` are refused rather than merely dropped:
+# a name that cannot fire is indistinguishable in the file from one that can,
+# which is the whole failure R36 and R46 are both instances of.
 mnt_c_write_denied() {
   "$PYTHON" - << 'PY'
 import json, sys
 perms = json.load(open('wsl/claude/settings.json', encoding='utf-8'))['permissions']
 deny = perms['deny']
-need = ['Write(//mnt/c/**)', 'Edit(//mnt/c/**)', 'NotebookEdit(//mnt/c/**)']
-missing = [r for r in need if r not in deny]
-if missing:
-    print('missing /mnt/c write denies (double-slash form): %s' % ', '.join(missing))
+if 'Edit(//mnt/c/**)' not in deny:
+    print('missing Edit(//mnt/c/**) -- the one rule that denies every file-editing tool')
+    sys.exit(1)
+inert = [r for r in deny if r.startswith(('Write(', 'NotebookEdit('))]
+if inert:
+    print('deny rules named after a tool the permission engine never matches '
+          '(fold them into an Edit(...) rule): %s' % ', '.join(inert))
     sys.exit(1)
 loose = [r for key in ('allow', 'ask') for r in perms.get(key, []) if 'mnt/c' in r]
 if loose:

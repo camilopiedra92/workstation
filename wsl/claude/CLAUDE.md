@@ -27,10 +27,11 @@ decomposition one model generation after building it. -->
 ## The Windows boundary
 
 Ubuntu under WSL2 on a Windows host. Never write to `/mnt/c`: work lives on
-ext4 (`~/Development`), 9-20x faster. Mechanisms back the rule -- deny rules
-for Write/Edit/NotebookEdit, guard-bash.sh for Bash -- and a denial naming
-the guard is policy working, not a malfunction; where the guard's net has a
-gap, the rule still holds. Reading and copying FROM `/mnt/c` is fine.
+ext4 (`~/Development`), 9-20x faster. Mechanisms back the rule -- one
+`Edit(//mnt/c/**)` deny, which covers Write and NotebookEdit too, and
+guard-bash.sh for Bash -- and a denial naming the guard is policy working,
+not a malfunction; where the guard's net has a gap, the rule still holds.
+Reading and copying FROM `/mnt/c` is fine.
 
 Windows PATH interop is off on purpose (`appendWindowsPath = false` in
 /etc/wsl.conf). Never assume a Windows binary is on PATH: the ones this
