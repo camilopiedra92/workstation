@@ -1220,3 +1220,57 @@ cost -- so this is a sharpening of record, not a reversal.
 The PR #10 re-review's acceptance criteria for this change -- batch-small,
 vertical slices with a contract test on the seam, and spec-vs-plan dates
 all surviving the contraction -- are each in the contracted file.
+
+Ruling R46: R43's scope is narrower than it claimed. Two of the three tool-level
+deny rules it named were inert from the commit that wrote them, and the check
+built to police them demanded both by name. The deny list keeps one rule --
+`Edit(//mnt/c/**)` -- and `check.sh` now refuses any deny entry named after
+`Write` or `NotebookEdit`.
+
+A file permission rule is matched against `Read(...)` or `Edit(...)` and no
+other tool name. Claude Code resolves all three file-editing tools -- Write,
+Edit, NotebookEdit -- against `Edit(...)` rules, and says so at startup, once
+per offending rule: "not matched by file permission checks ... Use
+Edit(//mnt/c/**) instead (Edit rules cover all file-editing tools)". That
+warning is what surfaced this. Nothing in the repo could have: the settings
+file and the check that judges it were written from the same wrong model, so
+they agreed with each other on every run, which is R36's failure repeated with
+the tool name in place of the path form.
+
+What is proven and what is not, stated separately because they are not the same
+strength. Proven: the Write tool is refused on /mnt/c. The probe was Task 12
+Step 5's method -- attempt the violation, harmlessly -- run with the Write tool
+against a path that did not exist, and the refusal came back in the same words
+R36 recorded, with no file created. Deduced, not proven: that `Edit(//mnt/c/**)`
+is the rule doing it. The startup warning says the `Write` rule is not
+consulted, and it was the only other candidate, so the deduction is tight; the
+contrafactual that would close it -- delete the Edit rule, restart, watch the
+write succeed -- means running a session with the boundary genuinely open, and
+was not worth that. The Bash tool was not used for the probe: R36 already
+established that Bash is intercepted by the auto-mode classifier before any
+rule is consulted, so it tests the classifier rather than the deny list.
+
+The substantive protection never lapsed. `Edit(//mnt/c/**)` shipped alongside
+the two inert rules and covers exactly what all three were meant to cover, so
+no write ever crossed to /mnt/c that should not have. What was wrong was the
+inventory: three names where one rule exists, in settings.json, in check.sh, in
+CLAUDE.md and in guard-bash.sh's header. Those four now say one rule. R43's own
+text is left standing: it is the faithful record of what was decided that day,
+including the part that was wrong, and this ruling is where its scope is
+corrected.
+
+The check is the half that matters, as in R36. `mnt_c_write_denied` asserted a
+list of three literal strings; it now asserts `Edit(//mnt/c/**)` is present and
+that no deny entry begins with `Write(` or `NotebookEdit(`. The second half is
+the point: dropping the dead names silently would leave the next person free to
+add one back by analogy -- the exact move `no_mnt_c`'s header already warns
+against -- and it would look identical in the file to a rule that fires. The
+`no_mnt_c` exclusion narrows to `(Read|Edit)` for the same reason, so a
+reintroduced inert rule fails two independent checks rather than none. Both
+were watched failing before being trusted.
+
+Cost if wrong: if some future version of Claude Code does start matching
+`Write(...)` rules, this repo has one rule where it could have had three, and
+the one it has is the one that has always worked. The startup warning is the
+signal that would tell us, and it is checked at every session start by the
+program itself rather than by anything here.

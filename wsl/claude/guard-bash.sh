@@ -37,9 +37,9 @@
 #     false-positive, and `cd /mnt/c/... && echo hi > file` is out of scope;
 #   - executing a Windows binary by absolute path (drift.sh's cmd.exe
 #     crossing) is not a write and passes untouched.
-# The complete guarantees are the Write/Edit/NotebookEdit deny rules in
-# settings.json; this hook is the net for the tool those rules cannot see
-# into.
+# The complete guarantee is the single Edit(//mnt/c/**) deny in settings.json,
+# which the permission engine applies to Write and NotebookEdit as well (R46);
+# this hook is the net for the tool that rule cannot see into.
 #
 # All matching is bash-native ([[ =~ ]] with patterns held in variables, the
 # form that keeps bash from reinterpreting regex metacharacters): no

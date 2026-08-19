@@ -380,6 +380,18 @@ It covers Claude's own file tools and the shell commands Claude Code recognises
 — `cat`, `head`, `sed` — and stops at anything that opens a file itself. A
 one-line Python or Node script reads a denied path without touching any of it.
 
+**The tool name in the rule is not a free label.** A file rule is matched
+against `Read(...)` or `Edit(...)` and nothing else; `Edit(...)` is what the
+engine consults for all three file-editing tools. `Write(//mnt/c/**)` and
+`NotebookEdit(//mnt/c/**)` name real tools, read as protection, and are never
+consulted — both shipped inert in the commit that added them, and `check.sh`
+demanded them by name, because the check was built from the same wrong model as
+the file it judges. Claude Code prints a warning about each at startup, which is
+what surfaced it, hours later rather than months. That is the fifth defect here
+to live in a check rather
+than in the configuration it judges, and the second — after the single-slash
+rules above — where the shape of the failure was a rule that could not fire.
+
 ## What did not port
 
 Recorded rather than omitted, because a dropped setting that is written down is
