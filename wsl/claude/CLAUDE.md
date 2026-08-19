@@ -51,6 +51,123 @@ design decision with real alternatives, propose the approach before writing.
 Ask before introducing a new dependency. I almost always prefer solving it
 with what is already in the project or with the standard library.
 
+Keep writes single-threaded, and fan out everything that is not a write.
+One agent holds the plan and edits the files; every other contributes
+intelligence, not actions. Parallel writers fail because an action carries
+an implicit decision, and two agents deciding differently produce work
+nobody can reconcile afterwards.
+
+So a plan whose tasks form a serial chain over the same files runs inline.
+Where a plan or a skill recommends splitting it across agents, read its own
+gate before obeying its header — Superpowers' `subagent-driven-development`
+asks whether the tasks are mostly independent and sends tightly-coupled work
+elsewhere itself. Deciding which shape I have is the whole judgement.
+
+Calibrate the ceremony to the blast radius, not to the length of the task
+list. A rename, a config line, a comment: do it, and let the suite verify.
+Ordinary work inside one module: tests where there is real logic (see Code
+below), written inline, one review before the merge. Something irreversible
+or facing outward — a write to a live system, a security boundary, a
+migration, a published contract: spec, plan, a failing test before every
+behaviour, a review at each milestone rather than at the end. Uniform
+ceremony is not safety; it buys latency, latency grows the batch, and the
+batch is where the risk actually lives.
+
+Architecture and the data model are their own category, because what can be
+wrong there is the decision rather than the code, and no amount of testing
+tells me a schema was the wrong schema. Three things follow.
+
+**Review the decision before the code exists.** Write the choice down first
+— context, the alternatives actually weighed, the decision, what it costs —
+one page, in source control beside the code. Reviewing the implementation of
+a wrong model does not save it. This is also the one place where spawning
+several independent attempts and comparing them earns its cost: design is
+where diversity of approach pays, and nothing is being written yet, so there
+is no writer to keep single.
+
+**Make the rule enforceable instead of remembered.** A boundary defended by
+review is defended until someone is tired. Write the check — a test that
+fails when a layer imports what it must not, when the only module allowed to
+read the environment stops being the only one. Governance by rule beats
+governance by inspection, and it is usually an afternoon's work.
+
+**For anything holding data, reversibility is the design property.** Expand,
+migrate, contract: add the new shape beside the old, move, then remove —
+each step backwards-compatible and separately revertible. Never one
+destructive step. Rehearse the rollback, not just the migration: the
+migration runs once, the rollback is the one needed on the bad day.
+Ceremony belongs on doors that only open one way, and a schema with data in
+it is the clearest one there is.
+
+The tiers do not change by domain. What changes is the material a check can
+be made of, and that is worth settling before starting.
+
+Backend is the easy case: correctness is input, output and state, so a test
+can assert nearly all of it, and test-first pays in full. Frontend is not —
+a test can assert that a button with the right accessible name exists and
+cannot tell me it looks right. So the suite there leans on integration over
+unit tests, where confidence per test is highest, and the missing half is
+closed by looking: render it, screenshot it, compare against the target,
+fix, repeat. **I cannot see my own output.** With no screenshot in the loop
+there is no feedback loop at all, only me asserting that CSS I never saw is
+fine — and the agent that wrote a component is the wrong one to judge how it
+looks, for the same reason it is the wrong one to review its own code.
+
+A whole application moves the risk from "is this right" to "do the pieces
+meet". Build the thinnest vertical slice that runs end to end and can be
+deployed before building any layer completely, and put a contract test on
+the seam between the parts: that is where the bugs live that neither side's
+own tests are looking for. Vertical slices, not horizontal layers — a
+finished backend with nothing calling it is a large batch nobody has
+validated.
+
+Two things never scale down, whatever the tier.
+
+**Review, on the branch and before the merge**, however small the change —
+a blocker has to be able to mean "do not merge" rather than "write a
+follow-up for something already on main". Delegate it, and give the reviewer
+a *clean* context deliberately: shared context inherits the author's blind
+spots, which is the whole thing a second pair of eyes is for. Check that
+whatever workflow you are following actually contains this step, because a
+plugin's own skills can disagree with each other about it — as of
+Superpowers 6.3.0, `executing-plans` goes straight from the last task to the
+merge, while `requesting-code-review` calls itself mandatory before one.
+Verify before trusting either.
+
+**Keep the batch small.** Prefer merging a finished, self-contained layer
+over holding a branch until the whole feature is done. A big branch makes
+the review expensive, makes a regression hard to locate, and buries the one
+diff where the mistake was obvious.
+
+Also worth delegating:
+
+- Broad search, verification runs, anything whose output is volume I will
+  never read again.
+- Independent attempts at an open question, when comparing them beats
+  iterating on one.
+
+Prefer a **fork** (`/subtask`) over a cold subagent whenever the task needs
+the conversation's background: a fork inherits the history and reuses the
+prompt cache, so it pays neither the briefing nor the cold start. A cold
+subagent is right when the task is genuinely self-contained, or when clean
+context is the point.
+
+Tell every delegated agent to write its report to a file and give me the
+path, then check the file is there before acting on it. A report that comes
+back only as a message lives in one context window and dies with it. Put it
+where the project already keeps that kind of record. The message is the
+notification; the file is the artefact.
+
+Delegating is not free — an agent spends several times the tokens of a
+chat, and a fleet of them an order of magnitude more. That is a reason to
+aim it, not to avoid it.
+
+Before the first task of a plan, read the spec too and compare their dates. A
+plan is a snapshot of what was known when it was written, and evidence keeps
+arriving after it. Where they disagree the spec's later measurement wins.
+Group everything that needs deciding into one question up front rather than
+interrupting per task.
+
 When I ask whether something is best practice, judge it against the
 authoritative source — the published schema, the vendor's docs, the upstream
 release calendar — and not against what is already configured here. Reading a
