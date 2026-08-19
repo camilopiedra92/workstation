@@ -1046,12 +1046,13 @@ said. Three research passes ran independently -- vendor guidance, delivery
 research, practitioner measurement -- and what follows came out of where they
 converged.
 
-Ruling R43: the "never" rules that name concrete commands move from prose in
-CLAUDE.md to mechanisms. Write, Edit and NotebookEdit are denied under
-//mnt/c/** in settings.json, and a PreToolUse hook on the Bash tool
-(wsl/claude/guard-bash.sh) blocks pip installs into the interpreter,
-python -m venv, npm global installs, and the common Bash shapes that write
-under /mnt/c.
+Ruling R43: the "never" rules that name concrete commands gain mechanisms.
+Write, Edit and NotebookEdit are denied under //mnt/c/** in settings.json,
+and a PreToolUse hook on the Bash tool (wsl/claude/guard-bash.sh) blocks pip
+installs into the interpreter, python -m venv, npm global installs, and the
+common Bash shapes that write under /mnt/c. The mechanisms back the prose for
+now; the prose contracts to pointers in a follow-up change, expand/contract
+applied to configuration.
 
 Why: a prompted rule is advisory and its compliance decays as the session
 grows -- measured at 5.6% lower odds per generated function across 1,650
@@ -1075,7 +1076,26 @@ real bugs before the hook shipped -- `rm /mnt/c/...` and `dd of=/mnt/c/...`
 passed because two patterns demanded a second space that a single-argument
 command does not have. A check nobody has watched fail, again.
 
+The clean-context review then earned its own entry in this ledger. The first
+version forked grep per pattern per line, and the reviewer measured 1.43 s on
+a 100-line heredoc -- against a cost sentence here that called it noise,
+predicted rather than measured, which is the exact failure R17 records. It
+also found the reviewer's other half: heredoc bodies and quoted prose scanned
+as commands (writing a README that MENTIONS pip install would have been
+blocked), quoted Windows paths -- their normal shape, they contain spaces --
+bypassing every /mnt/c rule, sed blocked while READING a file whose name
+contains -i, and ln blocked FROM /mnt/c where the write lands on ext4. The
+rewrite matches in-process with bash =~ (measured after: 5 ms on the same
+100-line heredoc, ~60 ms on an adversarial 100 lines that all mention
+/mnt/c), skips heredoc bodies, strips quoted spans for the command rules and
+tolerates quotes in the path rules, and gains a venv exemption: pip after an
+activation in the same command installs into that venv, not the interpreter,
+and activation cannot leak between calls because every Bash call is a fresh
+shell. Every finding is pinned as a fixture.
+
 Cost if wrong: a legitimate command that matches a blocked shape needs a
 pattern amended in one reviewed file, and the fixture that documents the
-false positive goes in beside the fix. The hook also costs one jq + sed + grep
-pass per Bash call, which is noise against the call itself.
+false positive goes in beside the fix. Runtime cost is measured above, on
+this machine, not predicted. Known accepted gaps, in the hook's own header: a
+deliberately quoted evasion (bash -c "pip install x"), and cd into /mnt/c
+followed by a relative write -- the guard aims at habit, not adversaries.
