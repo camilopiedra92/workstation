@@ -487,8 +487,8 @@ Recorded because it is a case of a reviewer catching the CONTROLLER applying a
 rule inconsistently, which is harder to see than catching a defect in the work.
 The bar itself was fine; my application of it was not.
 
-Ruling R29: every commit's author and committer email rewritten from
-the personal address to 142334282+camilopiedra92@users.noreply.github.com,
+Ruling R29: every commit's author and committer email rewritten from the
+owner's personal address to their GitHub noreply form,
 and the repo's local git config set to the same so future commits inherit it.
 User approved ("do the most recommended world-class thing").
 
