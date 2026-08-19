@@ -1218,7 +1218,11 @@ for d in dirs:
 sys.exit(status)
 PY
 }
-check "every skill names itself and says when to fire" skills_frontmatter
+if have "$PYTHON" && have_pyyaml; then
+  check "every skill names itself and says when to fire" skills_frontmatter
+else
+  skip "every skill names itself and says when to fire" "python3/pyyaml not installed"
+fi
 
 # ── Statusline behaviour ─────────────────────────────────────────────────────
 # These are pure functions from a JSON payload to a line of text, which makes

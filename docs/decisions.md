@@ -1144,15 +1144,23 @@ coding tasks parallelise badly. The skill therefore states it as: one writer
 by default; parallel writers only when the partition -- who owns which
 files, in what order the branches merge -- is written down before fanning
 out. That is a plan-time condition someone can check, not a prediction about
-files; when the page cannot be written, the work is not partitionable.
+files; when the page cannot be written, the work is not partitionable. The
+C-compiler build itself used the OTHER admissible form -- dynamic task
+claiming with a lock file and git's merge conflict as the mechanical
+tiebreaker -- which is fine where such a mechanism exists; this machine has
+none, so here the written partition is the form the exception takes.
 
 Second, the reviewer preference: a different model family is a stronger
 independent check than a fresh session of the same model. Self-preference
-bias in LLM evaluators is measured (arXiv:2410.21819) and traced to
-perplexity-based familiarity, which extends to architecturally similar
-models (arXiv:2509.03647) -- clean context helps, a different family helps
-more. Advisory rather than required, since this machine usually runs one
-family.
+bias in LLM evaluators is measured and traced to perplexity-based
+familiarity (arXiv:2410.21819), and family-level bias is measured
+separately: models systematically rate outputs from their own family higher
+(arXiv:2508.06709, Spiliopoulou et al.) -- clean context helps, a different
+family helps more. Advisory rather than required, since this machine
+usually runs one family. The first draft of this paragraph cited a
+mitigation paper for the family claim; the PR #10 re-review read both
+papers and swapped in the one that measures it, which is why citations get
+checked rather than trusted.
 
 Also decided here, because they are new text and not moves: the migration
 skill's dual-writes/shadow-reads step and its "never combine a schema change
