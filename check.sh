@@ -1167,6 +1167,63 @@ guard_bash_verdicts() {
 }
 check "guard-bash blocks what it claims and allows the lookalikes" guard_bash_verdicts
 
+# Skills load by their frontmatter: the model reads `description` to decide
+# when a skill fires, and `name` is the skill's identity. A name that does not
+# match its directory, an empty description, or a directory with no SKILL.md
+# at all each fail silently -- the skill just never loads, and nothing else
+# would notice. The fields are read from the delimited frontmatter block and
+# parsed as YAML, not grepped from the whole file: a `description:` line in
+# the BODY (any skill that shows an example frontmatter has one) must not
+# satisfy the check, and a description that is invalid YAML would stop the
+# skill loading while a grep still passed.
+skills_frontmatter() {
+  "$PYTHON" - << 'PY'
+import pathlib, sys, yaml
+
+root = pathlib.Path('wsl/claude/skills')
+dirs = sorted(d for d in root.iterdir() if d.is_dir()) if root.is_dir() else []
+if not dirs:
+    print('no skill directories under wsl/claude/skills')
+    sys.exit(1)
+status = 0
+for d in dirs:
+    f = d / 'SKILL.md'
+    if not f.is_file():
+        print('%s: no SKILL.md, so the skill silently does not exist' % d)
+        status = 1
+        continue
+    lines = f.read_text(encoding='utf-8').splitlines()
+    if not lines or lines[0] != '---':
+        print('%s: does not open with frontmatter' % f)
+        status = 1
+        continue
+    try:
+        end = lines[1:].index('---') + 1
+    except ValueError:
+        print('%s: frontmatter never closes, so the whole file is frontmatter' % f)
+        status = 1
+        continue
+    try:
+        meta = yaml.safe_load('\n'.join(lines[1:end])) or {}
+    except yaml.YAMLError as exc:
+        print('%s: frontmatter is not valid YAML: %s' % (f, exc))
+        status = 1
+        continue
+    if meta.get('name') != d.name:
+        print('%s: name %r does not match its directory %r' % (f, meta.get('name'), d.name))
+        status = 1
+    if not str(meta.get('description') or '').strip():
+        print('%s: description is empty, so the skill can never fire' % f)
+        status = 1
+sys.exit(status)
+PY
+}
+if have "$PYTHON" && have_pyyaml; then
+  check "every skill names itself and says when to fire" skills_frontmatter
+else
+  skip "every skill names itself and says when to fire" "python3/pyyaml not installed"
+fi
+
 # ── Statusline behaviour ─────────────────────────────────────────────────────
 # These are pure functions from a JSON payload to a line of text, which makes
 # them the one thing here that can be tested properly.
