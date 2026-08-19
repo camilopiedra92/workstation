@@ -66,6 +66,27 @@ EOF
   fi
 
   # --- 2. apt packages --------------------------------------------------------
+  # Docker's packages are not in Ubuntu's archive, so its repository has to be
+  # registered before the install below reads apt-packages.txt, which names
+  # them. Order is the whole point of putting this here rather than in a later
+  # step: get it wrong and the installer still works on a machine that already
+  # has Docker, and fails on the clean one it exists to rebuild.
+  #
+  # Both files are vendored under wsl/apt/ rather than fetched. A key pulled
+  # over the network at install time is trusted because it arrived, which is
+  # the same reasoning ci.yml rejects for the binaries it checksums. Vendored,
+  # the bytes apt trusts are in git, and any change to them is a diff somebody
+  # reviews. Verified when it was added: fingerprint
+  # 9DC858229FC7DD38854AE2D88D81803C0EBFCD88, uid "Docker Release (CE deb)".
+  #
+  # install(1) rather than cp+chmod: one call, permissions stated rather than
+  # inherited from whatever umask this runs under, and re-running it changes
+  # nothing observable.
+  log "Registering the Docker apt repository"
+  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo install -m 0644 "$WSL_DIR/apt/docker.asc" /etc/apt/keyrings/docker.asc
+  sudo install -m 0644 "$WSL_DIR/apt/docker.sources" /etc/apt/sources.list.d/docker.sources
+
   log "Installing apt packages"
   sudo apt-get update -qq
   # shellcheck disable=SC2046
@@ -259,6 +280,35 @@ if [ "$LINKS_ONLY" -eq 0 ]; then
     cp "$WSL_DIR/vscode/settings.json" "$HOME/.vscode-server/data/Machine/settings.json"
   else
     echo "    .vscode-server not present yet -- connect once from VS Code, then re-run"
+  fi
+
+  # --- 13. Docker daemon and group ----------------------------------------------
+  # The packages install the daemon but leave it stopped and disabled. systemd
+  # is enabled in /etc/wsl.conf by step 1, so enabling the unit is what makes
+  # Docker survive a `wsl --shutdown` instead of needing a hand-started daemon
+  # from a shell profile, which is the arrangement older WSL guides describe.
+  log "Enabling the Docker daemon"
+  sudo systemctl enable --now docker.service
+
+  # Reassigned rather than reusing step 11's copy: a step that silently depends
+  # on a variable set eighty lines earlier breaks the moment either one moves.
+  target_user="${USER:-$(id -un)}"
+  # id -nG reads the account database, not this shell's credentials, so the
+  # guard is still correct on the run right after the group was added.
+  #
+  # Split to one group per line and matched whole-line, not `grep -qw docker`
+  # against the space-separated list. `-w` treats a hyphen as a word boundary,
+  # so membership of an unrelated `docker-users` group would satisfy it and the
+  # real usermod would never run -- the same shape as the appendWindowsPath
+  # guard in step 1, which had to be anchored for the same reason. Verified:
+  # `echo "camilo docker-users" | grep -qw docker` matches, `grep -qx` does not.
+  if ! id -nG "$target_user" | tr ' ' '\n' | grep -qx docker; then
+    log "Adding $target_user to the docker group"
+    # Root-equivalent by design: the socket lets any member mount the host
+    # filesystem into a privileged container. Accepted on a disposable WSL box
+    # and recorded in docs/decisions.md rather than left as an unstated risk.
+    sudo usermod -aG docker "$target_user"
+    echo "    docker group applies to new shells only -- Ubuntu 26.04 ships no newgrp or sg"
   fi
 
   log "Done. Open a new shell, or run: exec zsh"

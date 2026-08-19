@@ -1,0 +1,29 @@
+# The Docker Engine apt repository, in deb822 format.
+#
+# Vendored rather than written by install.sh with a heredoc, for the same
+# reason starship.toml and mise/config.toml are files instead of generated
+# text: this repo declares artefacts, it does not fabricate them. What apt
+# trusts is reviewable in a diff here, not assembled at runtime on the machine.
+#
+# Suites is the Ubuntu codename and is pinned rather than resolved from
+# /etc/os-release. Resolving it would make a release upgrade silent -- the
+# installer would quietly point at a suite Docker may not publish yet, and the
+# first sign would be an install that fails on a machine being rebuilt.
+# Pinning turns that into an edit somebody has to make and review. Confirmed
+# present before pinning: download.docker.com/linux/ubuntu/dists/resolute/
+# Release returns 200.
+#
+# Architectures is likewise explicit. Left off, apt uses whatever the host
+# reports; naming it means a diff appears the day this repo is applied to a
+# machine that is not amd64, rather than an install that silently pulls
+# nothing.
+#
+# Signed-By points at the key this repo vendors beside this file. That path is
+# where wsl/install.sh copies wsl/apt/docker.asc to -- the two must be changed
+# together.
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: resolute
+Components: stable
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/docker.asc
