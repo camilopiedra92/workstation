@@ -129,9 +129,26 @@ jobs:
       - name: Install the Python modules check.sh imports
         run: python3 -m pip install --quiet pyyaml jsonschema
 
-      # zsh and python3 come from the runner image rather than a pinned
-      # download: check.sh's own zsh check already skips (or, under CI,
-      # fails) when zsh is absent, so there is nothing here to duplicate.
+      # This comment used to say zsh came from the runner image. It does not:
+      # ubuntu-latest carries no zsh at all, so check.sh's zsh check failed on
+      # every CI run this repo has ever had. That is strict mode working as
+      # designed -- a missing tool is a hole in coverage, not a neutral third
+      # outcome -- on a repo whose commits reached main without ever being
+      # gated on it.
+      #
+      # From apt and unpinned, unlike the four tools above. Those are pinned
+      # because CI and the host have to reach the same verdict on the same
+      # file, and there is an artifact plus a SHA256 to pin them with. zsh
+      # publishes no such artifact, and apt is the same source
+      # wsl/apt-packages.txt already declares it from. Measured rather than
+      # assumed: 5.9 on this runner and 5.9 on the machine, so the parser
+      # judging the shell config is the same one in both places.
+      - name: Install zsh, which check.sh parses the shell config with
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends zsh
+
+      # python3 does come from the image (3.12.3) and needs nothing here.
       #
       # CI is set by the runner, so strict mode needs no wiring and cannot be
       # forgotten.
@@ -161,14 +178,35 @@ jobs:
       # would simply stop being covered, with nothing going red. Parsing it
       # means this job covers whatever the manifest declares, forever,
       # without anyone remembering to update a second place.
+      #
+      # Both winget calls in this job carry --accept-source-agreements and
+      # --disable-interactivity, and on a runner neither is optional. The
+      # first use of the msstore source prompts for its agreements; with no
+      # stdin to answer from, winget fails with 0x8a150042 "Error reading
+      # input in prompt" and exit -1978335166. That is what made every id
+      # here look unresolvable -- Microsoft.WindowsTerminal included, which
+      # is the tell that the ids were never the problem. bootstrap.ps1
+      # passes --accept-configuration-agreements for the identical reason,
+      # one command over; this is that lesson reaching the job that had not
+      # learned it.
+      #
+      # winget's output is captured and printed on failure instead of going
+      # to Out-Null. Discarding it is what hid the cause: the job reported
+      # nine unresolvable ids for months while winget was saying, on every
+      # one of them, exactly what it wanted. A check has to report what it
+      # saw and not only its verdict.
       - name: Every declared package id resolves
         shell: pwsh
         run: |
           $ids = python -c "import yaml; doc = yaml.safe_load(open('windows/configuration.winget', encoding='utf-8')); [print(r['settings']['id']) for r in doc['properties']['resources'] if r['resource'].endswith('/WinGetPackage')]"
           $bad = @()
           foreach ($id in $ids) {
-            winget show --id $id --exact | Out-Null
-            if ($LASTEXITCODE -ne 0) { $bad += $id }
+            $out = winget show --id $id --exact --accept-source-agreements --disable-interactivity 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $bad += $id
+              Write-Host "--- winget show --id $id --exact exited $LASTEXITCODE ---"
+              $out | Out-String | Write-Host
+            }
           }
           if ($bad) { throw "unresolvable package ids: $($bad -join ', ')" }
 
@@ -197,8 +235,12 @@ jobs:
           $bad = @()
           foreach ($line in $pinned) {
             $id, $v = $line -split ' ', 2
-            winget show --id $id --version $v --exact | Out-Null
-            if ($LASTEXITCODE -ne 0) { $bad += "$id $v" }
+            $out = winget show --id $id --version $v --exact --accept-source-agreements --disable-interactivity 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $bad += "$id $v"
+              Write-Host "--- winget show --id $id --version $v --exact exited $LASTEXITCODE ---"
+              $out | Out-String | Write-Host
+            }
           }
           if ($bad) { throw "pinned versions winget cannot offer: $($bad -join ', ')" }
 
