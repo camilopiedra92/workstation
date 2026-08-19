@@ -10,6 +10,10 @@ its lockfile points to, the formatter and linter already configured. Do not
 change them or add config on your own initiative. The rules here are for
 projects with nothing to respect yet.
 
+Ask before introducing a new dependency, whatever the project. The preferred
+answer is almost always what the project already has, or the standard
+library.
+
 ## Runtimes and tools
 
 - Runtimes and CLI tools come from mise, never from apt.
@@ -19,8 +23,11 @@ projects with nothing to respect yet.
 ## Python
 
 - Packages and virtualenvs come from uv: `uv venv`, `uv pip install`,
-  `uv tool install` for CLIs. Bare `pip install` and `python -m venv` are
-  blocked by the guard hook; the block is policy, not a malfunction.
+  `uv tool install` for CLIs. The guard hook blocks `python -m venv`
+  unconditionally, and `pip install` unless a venv is activated earlier in
+  the same command -- pip into an activated venv is legitimate (an existing
+  pip project's toolchain outranks the uv preference). A block is policy,
+  not a malfunction.
 - `.python-version` is load-bearing: uv reads it and it decides the
   interpreter `uv venv` builds on. Keep it. `mise.toml` is for versions
   something outside a venv must resolve.
@@ -31,6 +38,9 @@ projects with nothing to respect yet.
 ## Node
 
 - pnpm, declared in mise config. Existing npm projects stay on npm.
+- Never `npm i -g` (the guard hook blocks it): it writes into a directory
+  named after node's patch version and loses everything in it on the next
+  bump. Global CLIs come from mise or `uv tool install`.
 - Do not declare `packageManager` in `package.json`: corepack reads that
   field, and node 26 no longer ships corepack. The lockfile says which
   manager a project uses, and it cannot be wrong about it.

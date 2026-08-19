@@ -1122,5 +1122,47 @@ not error -- it just never fires.
 Cost if wrong: a procedure the model should have seen does not load because
 the description did not match the task. Mitigated the same way the vendor
 mitigates it: descriptions written as "Use when..." naming the concrete
-situations, and the CLAUDE.md pointers naming the skill beside the rule it
-expands.
+situations, and, once CLAUDE.md contracts, pointers naming the skill beside
+the rule it expands. The skills also consolidate uncontested practice beyond
+CLAUDE.md's text rather than only relocating it; what changed meaning is
+decided in R45, not smuggled in the move.
+
+Ruling R45: two rules change meaning in this restructure, and this ruling is
+where that is decided rather than implied. The clean-context review of PR
+#10 forced it, correctly refusing to let rule changes ride inside a change
+described as a move.
+
+First, single-writer acquires its real boundary. CLAUDE.md said "parallel
+writers fail", absolute. The vendor's actual position is narrower: parallel
+implementation is endorsed only under disjoint file ownership with the merge
+order decided in advance ("Avoid file conflicts. Two teammates editing the
+same file leads to overwrites. Break the work so each teammate owns a
+different set of files" -- Claude Code agent-teams docs), demonstrated at
+scale by their C-compiler build (16 concurrent writers coordinated by task
+locks plus git as tiebreaker), and bounded by their own caveat that most
+coding tasks parallelise badly. The skill therefore states it as: one writer
+by default; parallel writers only when the partition -- who owns which
+files, in what order the branches merge -- is written down before fanning
+out. That is a plan-time condition someone can check, not a prediction about
+files; when the page cannot be written, the work is not partitionable.
+
+Second, the reviewer preference: a different model family is a stronger
+independent check than a fresh session of the same model. Self-preference
+bias in LLM evaluators is measured (arXiv:2410.21819) and traced to
+perplexity-based familiarity, which extends to architecturally similar
+models (arXiv:2509.03647) -- clean context helps, a different family helps
+more. Advisory rather than required, since this machine usually runs one
+family.
+
+Also decided here, because they are new text and not moves: the migration
+skill's dual-writes/shadow-reads step and its "never combine a schema change
+and a behaviour change in one deploy"; and the reviewer-mandate rule --
+scope the reviewer to correctness and stated requirements, because a
+reviewer told to find gaps reports them even in sound work (the vendor's own
+adversarial-review caveat). Uncontested mechanism, worth having in the file
+that fires when it applies.
+
+Cost if wrong: a future reader treats the single-writer exception as licence
+and fans out writers without the written partition -- the failure the
+absolute rule guarded against. The skill's wording makes the partition page
+the precondition, and the default remains one writer.

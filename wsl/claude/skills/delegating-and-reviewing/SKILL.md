@@ -1,6 +1,6 @@
 ---
 name: delegating-and-reviewing
-description: Use when spawning subagents or forks, splitting a plan across agents, or running the pre-merge review. Covers the single-writer rule, fork vs cold subagent, report files, and the reviewer's mandate.
+description: Use when spawning subagents or forks, splitting a plan across agents, or when finishing a branch, opening a PR, or about to merge. Covers the single-writer rule, fork vs cold subagent, report files, and the pre-merge review's protocol and mandate.
 ---
 
 # Delegating work and reviewing it
@@ -19,9 +19,16 @@ description: Use when spawning subagents or forks, splitting a plan across agent
 
 - One agent holds the plan and edits the files; every other contributes
   intelligence, not actions. A serial chain over the same files runs inline.
-- Parallel writers only when file ownership is disjoint and planned before
-  fanning out, with the merge order decided in advance. Isolation is easy;
-  recombination is where parallel implementation fails.
+- The one exception, decided in R45: parallel writers only when the
+  partition is written down BEFORE fanning out -- which agent owns which
+  files or modules, and in what order the branches merge. That page is a
+  plan-time condition someone can check. If it cannot be written, the work
+  is not partitionable and one writer holds the pen.
+- Where a plan or a skill recommends splitting work across agents, read its
+  own gate before obeying its header -- Superpowers'
+  `subagent-driven-development` asks whether the tasks are mostly
+  independent and sends tightly-coupled work elsewhere itself. Deciding
+  which shape the work has is the whole judgement.
 
 ## Fork vs cold subagent
 
@@ -41,6 +48,11 @@ description: Use when spawning subagents or forks, splitting a plan across agent
 
 - Every branch gets a review before the merge, however small the change. A
   blocker must be able to mean "do not merge", not "follow-up on main".
+- Check that whatever workflow is being followed actually contains this
+  step: a plugin's own skills can disagree with each other about it -- as of
+  Superpowers 6.3.0, `executing-plans` goes straight from the last task to
+  the merge, while `requesting-code-review` calls itself mandatory before
+  one. Verify before trusting either.
 - The reviewer gets deliberately clean context: a cold agent that sees the
   diff and the criteria, not the reasoning that produced the change. The
   author's context inherits the author's blind spots. A different model
@@ -54,10 +66,6 @@ description: Use when spawning subagents or forks, splitting a plan across agent
   test failed before the fix existed, or have the reviewer run the
   verification independently.
 
-<!-- Why single-writer: an action carries an implicit decision, and two
-agents deciding differently produce work nobody can reconcile. Vendor
-guidance agrees writes parallelise badly ("most coding tasks") and endorses
-parallel writers only with disjoint ownership plus mechanical conflict
-resolution. Why clean-context review: self-preference bias in LLM evaluators
-is measured and traced to perplexity-based familiarity, which also operates
-at model-family level — hence the different-family preference. -->
+<!-- Why single-writer, why its exception has the shape it has, and the
+citations behind the clean-context and different-family preferences:
+docs/decisions.md R45 in ~/workstation. -->

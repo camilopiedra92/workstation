@@ -20,8 +20,9 @@ halves, and each needs its own loop.
 I cannot see my own output. Without a screenshot in the loop there is no
 feedback loop — only an assertion that CSS nobody saw is fine.
 
-1. Render the change in the real app (browser tools are available).
-2. Screenshot it.
+1. Render the change in the real app.
+2. Screenshot it, with whatever the session has for that; if nothing can
+   produce a screenshot, say so -- that is a missing loop, not a passed one.
 3. Compare against the target (design, mock, or the before state).
 4. List the differences. Fix. Repeat until the list is empty.
 

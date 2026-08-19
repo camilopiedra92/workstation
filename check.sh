@@ -1169,32 +1169,54 @@ check "guard-bash blocks what it claims and allows the lookalikes" guard_bash_ve
 
 # Skills load by their frontmatter: the model reads `description` to decide
 # when a skill fires, and `name` is the skill's identity. A name that does not
-# match its directory, or an empty description, fails silently -- the skill
-# just never loads, and nothing else would notice.
+# match its directory, an empty description, or a directory with no SKILL.md
+# at all each fail silently -- the skill just never loads, and nothing else
+# would notice. The fields are read from the delimited frontmatter block and
+# parsed as YAML, not grepped from the whole file: a `description:` line in
+# the BODY (any skill that shows an example frontmatter has one) must not
+# satisfy the check, and a description that is invalid YAML would stop the
+# skill loading while a grep still passed.
 skills_frontmatter() {
-  local f dir name desc status=0
-  for f in wsl/claude/skills/*/SKILL.md; do
-    [ -e "$f" ] || {
-      echo "no skills found under wsl/claude/skills"
-      return 1
-    }
-    dir=$(basename "$(dirname "$f")")
-    head -1 "$f" | grep -q '^---$' || {
-      echo "$f: does not open with frontmatter"
-      status=1
-    }
-    name=$(sed -n 's/^name: *//p' "$f" | head -1)
-    desc=$(sed -n 's/^description: *//p' "$f" | head -1)
-    [ "$name" = "$dir" ] || {
-      echo "$f: name '$name' does not match its directory '$dir'"
-      status=1
-    }
-    [ -n "$desc" ] || {
-      echo "$f: description is empty, so the skill can never fire"
-      status=1
-    }
-  done
-  return "$status"
+  "$PYTHON" - << 'PY'
+import pathlib, sys, yaml
+
+root = pathlib.Path('wsl/claude/skills')
+dirs = sorted(d for d in root.iterdir() if d.is_dir()) if root.is_dir() else []
+if not dirs:
+    print('no skill directories under wsl/claude/skills')
+    sys.exit(1)
+status = 0
+for d in dirs:
+    f = d / 'SKILL.md'
+    if not f.is_file():
+        print('%s: no SKILL.md, so the skill silently does not exist' % d)
+        status = 1
+        continue
+    lines = f.read_text(encoding='utf-8').splitlines()
+    if not lines or lines[0] != '---':
+        print('%s: does not open with frontmatter' % f)
+        status = 1
+        continue
+    try:
+        end = lines[1:].index('---') + 1
+    except ValueError:
+        print('%s: frontmatter never closes, so the whole file is frontmatter' % f)
+        status = 1
+        continue
+    try:
+        meta = yaml.safe_load('\n'.join(lines[1:end])) or {}
+    except yaml.YAMLError as exc:
+        print('%s: frontmatter is not valid YAML: %s' % (f, exc))
+        status = 1
+        continue
+    if meta.get('name') != d.name:
+        print('%s: name %r does not match its directory %r' % (f, meta.get('name'), d.name))
+        status = 1
+    if not str(meta.get('description') or '').strip():
+        print('%s: description is empty, so the skill can never fire' % f)
+        status = 1
+sys.exit(status)
+PY
 }
 check "every skill names itself and says when to fire" skills_frontmatter
 
