@@ -197,7 +197,10 @@ available to anyone rebuilding this machine.
 Nothing moves before this list exists and every entry is accounted for.
 
 ```bash
-base=/mnt/c/Users/$USER/Development
+# Spelled out, not $USER: the WSL account is `camilo` and the Windows profile
+# is `camilo.piedrahita`. With $USER the glob matches nothing and the inventory
+# comes back empty -- which reads as "nothing to migrate" rather than as an error.
+base=/mnt/c/Users/camilo.piedrahita/Development
 for d in "$base"/*/; do
   name=$(basename "$d")
   if [ ! -d "$d/.git" ]; then
@@ -322,20 +325,66 @@ for d in <the ones the inventory marked NOT A GIT REPO>; do
 done
 ```
 
-## Step 6 — Bring the untracked files a clone cannot
+## Step 6 — Bring the local files a clone cannot
 
-`.remember/`, `.claude/`, `.env` files and `.mcp.json` are untracked by design and
-do not survive a clone. Copies made with `tar` already carry them; only re-cloned
-repositories need this:
+`.remember/`, `.env` files and parts of `.claude/` are local state no clone
+reproduces. Copies made with `tar` already carry them; only re-cloned
+repositories need this.
+
+**Do not copy those directories wholesale, and this is the correction that
+matters.** An earlier version of this step called `.claude/` and `.mcp.json`
+untracked by design. In `surge-pods` they are not: 430 files under `.claude/`
+are versioned, and so is `.mcp.json`. Copying the directory over a fresh clone
+rewinds every one of them to whatever the Windows checkout held — here 72
+commits and eight days stale, 77 of those files differing — and drags CRLF in
+with them, because Git for Windows checked them out that way: 142 of the 401
+versioned `.claude/` files on the Windows side have CRLF endings.
+
+Step 7 cannot see any of that. `cp` does not move `HEAD`, so the verification
+there reports MATCH — accurately, about the one thing a copy could not have
+broken — while the working tree has just gone backwards. Only `git status` sees
+it, which is why it is part of this step now.
+
+So decide file by file, and ask the *destination*: the fresh clone is the
+authority on what is versioned today, and the Windows copy's answer is 72
+commits old.
 
 ```bash
 for r in <the re-cloned ones>; do
-  src="$base/$r"
+  src="$base/$r"; dst=~/Development/$r
   for extra in .remember .claude .mcp.json .env .env.local; do
-    [ -e "$src/$extra" ] && cp -r "$src/$extra" ~/Development/$r/ && echo "$r: brought $extra"
+    [ -e "$src/$extra" ] || continue
+    while IFS= read -r -d '' f; do
+      # The clone already has the tracked copy, at the right commit and with LF
+      # endings. Per file rather than per directory, because `.claude/` is
+      # versioned and local-only at once -- skipping it whole would lose
+      # settings.local.json and the caches under it.
+      git -C "$dst" ls-files --error-unmatch "$f" > /dev/null 2>&1 && continue
+      mkdir -p "$dst/$(dirname "$f")"
+      cp "$src/$f" "$dst/$f" && echo "$r: brought $f"
+    done < <(cd "$src" && find "$extra" -type f -print0)
   done
 done
 ```
+
+On `surge-pods` that skips 398 versioned files and still brings 65 local ones.
+
+Then confirm nothing versioned moved:
+
+```bash
+for r in <the re-cloned ones>; do
+  printf '%-16s %s tracked files modified\n' "$r" \
+    "$(git -C ~/Development/$r status --porcelain --untracked-files=no | wc -l)"
+done
+```
+
+**Every count must be zero.** A non-zero one means a tracked file was
+overwritten anyway, and `git -C ~/Development/<repo> checkout -- .` puts it back.
+
+What does get copied keeps the line endings it had on `/mnt/c` — 30 of those 65
+on `surge-pods` are CRLF. Git ignores all of them, so `git status` stays quiet;
+a parser will not, and a trailing `\r` on the last value of a `.env` is the
+usual way that surfaces.
 
 ## Step 7 — Verify before anything is deleted
 
