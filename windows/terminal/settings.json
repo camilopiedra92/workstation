@@ -10,7 +10,12 @@
   //   background-blur=macos-glass  the nearest thing is useAcrylic, which is a
   //                           different material, not the same one renamed
   //   window-padding-color=extend  no counterpart
-  //   minimum-contrast        no counterpart
+  //   minimum-contrast        WRONG when written, corrected here: the
+  //                           counterpart exists and is spelled
+  //                           adjustIndistinguishableColors. It is set in
+  //                           profiles.defaults below. Confirmed in both
+  //                           schemas/windows-terminal.json and the live
+  //                           upstream schema before this line changed.
   //
   // Every other key below was confirmed against schemas/windows-terminal.json
   // before being written. check.sh re-confirms it on every run.
@@ -26,6 +31,40 @@
   // pick up without needing a GUID.
 
   "defaultProfile": "Ubuntu-26.04",
+
+  // The tab row is the one surface the colour scheme does not reach: a
+  // scheme paints the panes, never the chrome above them. Left unset it
+  // renders in Windows' own grey, which is what makes an otherwise themed
+  // terminal still read as a stock one.
+  //
+  // frame / unfocusedFrame would colour the window border too. They are
+  // Windows Terminal Preview only, and this machine runs the stable
+  // package (Microsoft.WindowsTerminal_8wekyb3d8bbwe), so they are absent
+  // on purpose rather than forgotten. useMica is deliberately off: Mica
+  // is drawn under the whole window including the panes, and cannot
+  // coexist with the unblurred transparency profiles.defaults asks for.
+  "theme": "Catppuccin",
+  "themes": [
+    {
+      "name": "Catppuccin",
+      "window": { "applicationTheme": "dark" },
+      // mantle, one step darker than the panes' base. The tab row reads as
+      // behind the terminal rather than beside it, which is what makes the
+      // active tab look cut out of the window instead of stuck on it.
+      "tabRow": { "background": "#181825", "unfocusedBackground": "#11111B" },
+      // The active tab takes the pane's own background, so the seam between
+      // tab and content disappears.
+      "tab": {
+        "background": "terminalBackground",
+        "unfocusedBackground": "#00000000",
+        // The distro logo is the only saturated colour in the chrome and it
+        // competes with the content for attention. monochrome keeps the
+        // shape, which is all the icon is being read for.
+        "iconStyle": "monochrome",
+        "showCloseButton": "activeOnly"
+      }
+    }
+  ],
   "copyOnSelect": true,
   "copyFormatting": "none",
 
@@ -35,25 +74,41 @@
         // The same font as the Mac, and as VS Code below. check.sh asserts all
         // three agree and that exactly one Nerd Font is declared installed.
         "face": "JetBrainsMono Nerd Font",
-        "size": 14,
+        // 12, not Windows Terminal's default 12 by accident: this is a 100%-DPI
+        // display (AppliedDPI 0x60), so the point size is the whole of the
+        // apparent size and 14 read as oversized on it.
+        "size": 12,
         // JetBrains Mono ships no `liga`; its ligatures live in `calt`.
         // `zero` slashes the zero -- the single highest-value feature in a
         // terminal, where 0 and O collide constantly in paths and hashes.
         // `ss02` is the font's "Closed construction": narrower apertures on
         // a/c/e/s. A letterform preference, unrelated to ligatures.
         "features": { "calt": 1, "zero": 1, "ss02": 1 },
-        // Ghostty: adjust-cell-height = 12%, a 12% increase over the natural
-        // computed cell height. cellHeight here is not the same kind of
-        // setting -- it is an absolute override, not an adjustment, and
-        // Microsoft's own schema description says the unset default "is
-        // usually quite close to setting this to 1.2". Composing the two --
-        // 1.2 natural times Ghostty's 1.12 adjustment -- gives 134%, written
-        // below. Confirmed present in schemas/windows-terminal.json
+        // An absolute override, not an adjustment: Microsoft's own schema
+        // description says the unset default "is usually quite close to
+        // setting this to 1.2". 120% therefore asks for roughly the font's
+        // natural line height and nothing more.
+        //
+        // It was 134% -- that 1.2 composed with the Mac Ghostty's
+        // adjust-cell-height = 12%. The Mac parity this file was built to keep
+        // is no longer a requirement, and 34% of added leading is a lot of
+        // vertical room to spend on a terminal that draws boxes and trees.
+        // Confirmed present in schemas/windows-terminal.json
         // (font.cellHeight, a CSSLengthPercentage) before being written.
-        "cellHeight": "134%"
+        "cellHeight": "120%"
       },
-      // Catppuccin Mocha, the same theme as the Mac's Ghostty.
-      "colorScheme": "Catppuccin Mocha",
+      // Catppuccin Mocha with two ANSI slots reassigned so every foreground
+      // this environment actually paints clears WCAG AA. See the scheme below
+      // for the measurements; the name carries the "(AA)" because the result
+      // is no longer canonical Catppuccin and should not claim to be.
+      "colorScheme": "Catppuccin Mocha (AA)",
+      // Windows Terminal's counterpart to Ghostty's minimum-contrast, which
+      // the header of this file used to say did not exist. "indexed" adjusts
+      // only colours that came from the scheme -- which is every colour the
+      // prompt, the statusline and git emit, since all of them speak 16-colour
+      // ANSI on purpose. A net, not a design: the scheme below is expected to
+      // pass on its own, and check.sh asserts that it does.
+      "adjustIndistinguishableColors": "indexed",
       // Ghostty: window-padding-x = 18, window-padding-y = 14.
       // Order here is left, top, right, bottom.
       "padding": "18, 14, 18, 14",
@@ -105,15 +160,27 @@
 
   "schemes": [
     {
-      "name": "Catppuccin Mocha",
+      // Catppuccin Mocha, three values moved. Every replacement is another
+      // colour from Catppuccin's own ramp -- nothing here is invented.
+      //
+      // Ratios below are against this scheme's own background (#1E1E2E),
+      // computed with the WCAG relative-luminance formula. check.sh recomputes
+      // them on every run, so these numbers cannot quietly go stale.
+      "name": "Catppuccin Mocha (AA)",
 
       "cursorColor": "#F5E0DC",
-      "selectionBackground": "#585B70",
+      // surface1, was surface2. Text over a selection went 4.62 -> 6.31:1.
+      "selectionBackground": "#45475A",
 
       "background": "#1E1E2E",
       "foreground": "#CDD6F4",
 
-      "black": "#45475A",
+      // base, was surface1. In a dark scheme ANSI black is almost never text
+      // on the background -- it is the ink on top of the bright powerline
+      // segments the statusline draws. Taking it all the way down to the
+      // background colour makes it a better ink (worst segment pair 3.94 ->
+      // 5.81:1) and only costs its use as a background, which nothing here has.
+      "black": "#1E1E2E",
       "red": "#F38BA8",
       "green": "#A6E3A1",
       "yellow": "#F9E2AF",
@@ -122,7 +189,13 @@
       "cyan": "#94E2D5",
       "white": "#BAC2DE",
 
-      "brightBlack": "#585B70",
+      // overlay2, was surface2. This is the single slot the whole environment
+      // means by "dimmed": statusline labels, starship's separators, git's
+      // hints. At surface2 it measured 2.46:1 -- below AA, on the text most
+      // often read at a glance. overlay2 brings it to 5.81:1 and stays
+      // recognisably a grey. The dimmed look is now carried by hue, not by
+      // being too dark to read.
+      "brightBlack": "#9399B2",
       "brightRed": "#F38BA8",
       "brightGreen": "#A6E3A1",
       "brightYellow": "#F9E2AF",

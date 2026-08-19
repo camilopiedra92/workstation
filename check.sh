@@ -295,6 +295,109 @@ else
   skip "windows terminal settings match the published schema" "jsonschema not installed"
 fi
 
+# --- The scheme is readable where this environment actually paints -----------
+# A colour scheme cannot be judged one colour at a time. What decides whether
+# text is readable is the PAIR: this ink, on that background. The schema check
+# above validates that every value is a colour; it has no opinion about whether
+# any of them can be read.
+#
+# So this reads the pairs out of statusline.sh itself -- its `seg <bg> <accent>
+# <ink>` calls are the exhaustive list of what the statusline paints -- maps the
+# ANSI codes back through the scheme, and measures each one. Same argument as
+# the one-nerd-font check: two files that have to agree, and nothing but a check
+# to notice when they stop agreeing.
+#
+# 4.5:1 is WCAG AA for normal text. Terminal text is normal text.
+scheme_contrast() {
+  "$PYTHON" - << 'PYEOF'
+import json, re, sys
+
+STATUSLINE = 'wsl/claude/statusline.sh'
+
+s = re.sub(r'^\s*//.*$', '', open('windows/terminal/settings.json', encoding='utf-8').read(), flags=re.M)
+s = re.sub(r',(\s*[}\]])', r'\1', s)
+wt = json.loads(s)
+want = wt['profiles']['defaults']['colorScheme']
+scheme = next((x for x in wt['schemes'] if x['name'] == want), None)
+if scheme is None:
+    print('profiles.defaults.colorScheme is %r, which no scheme defines' % want)
+    sys.exit(1)
+
+# ANSI code -> scheme key. 39 and 49 are "default foreground/background", which
+# is what statusline.sh emits to step out of a colour without a full reset.
+NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
+CODE = {39: 'foreground', 49: 'background'}
+for i, n in enumerate(NAMES):
+    bright = 'bright' + n[0].upper() + n[1:]
+    CODE[30 + i] = CODE[40 + i] = n
+    CODE[90 + i] = CODE[100 + i] = bright
+
+
+def lum(h):
+    h = h.lstrip('#')
+
+    def chan(v):
+        v = int(v, 16) / 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * chan(h[0:2]) + 0.7152 * chan(h[2:4]) + 0.0722 * chan(h[4:6])
+
+
+def ratio(a, b):
+    la, lb = lum(a), lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+problems = []
+src = open(STATUSLINE, encoding='utf-8').read()
+
+
+def measure(what, fg_code, bg_code):
+    fk, bk = CODE.get(fg_code), CODE.get(bg_code)
+    if fk is None or bk is None:
+        problems.append('%s uses an ANSI code with no scheme colour: %s on %s'
+                        % (what, fg_code, bg_code))
+        return
+    r = ratio(scheme[fk], scheme[bk])
+    if r < 4.5:
+        problems.append('%s: %s %s on %s %s is %.2f:1, below WCAG AA 4.5:1'
+                        % (what, fk, scheme[fk], bk, scheme[bk], r))
+
+
+# Every segment the statusline paints, read from the source of truth.
+segs = re.findall(r'seg (\d+) (\d+) (\d+)', src)
+if not segs:
+    problems.append('found no seg calls in %s -- has it been rewritten?' % STATUSLINE)
+for bg, _accent, ink in segs:
+    measure('statusline segment', int(ink), int(bg))
+
+# The dimmed text: labels, separators, the second line's chrome. One slot, and
+# the one most often read at a glance.
+dim = re.search(r"DIM=\$'\\033\[(\d+)m'", src)
+if dim:
+    measure('statusline DIM', int(dim.group(1)), 49)
+else:
+    problems.append('could not find DIM in %s' % STATUSLINE)
+
+# The scheme's own defaults, and text sitting on a selection.
+if ratio(scheme['foreground'], scheme['background']) < 4.5:
+    problems.append('foreground on background is %.2f:1, below 4.5:1'
+                    % ratio(scheme['foreground'], scheme['background']))
+if 'selectionBackground' in scheme:
+    r = ratio(scheme['foreground'], scheme['selectionBackground'])
+    if r < 4.5:
+        problems.append('foreground on selectionBackground is %.2f:1, below 4.5:1' % r)
+
+for p in problems:
+    print(p)
+sys.exit(1 if problems else 0)
+PYEOF
+}
+if have "$PYTHON"; then
+  check "the scheme is readable where this environment paints" scheme_contrast
+else
+  skip "the scheme is readable where this environment paints" "python3 not installed"
+fi
+
 # --- Every action id and keybinding id resolve to each other -----------------
 # The schema (checked above) validates actions and keybindings independently --
 # it has no way to know they are supposed to refer to each other, so it happily

@@ -4,25 +4,52 @@
 
 add_newline = true
 
+# Left of the fill is where you are; right of it is what just happened. The
+# split keeps the growing half (path, branch) from pushing the transient half
+# (duration, exit status) off the line.
 format = """
-$directory$git_branch$git_status$python$nodejs$rust$cmd_duration
+$directory$git_branch$git_status$python$nodejs$rust$fill$cmd_duration$status$jobs
 $character"""
 
+# Names, not colours. Every value below is an ANSI colour name, so the prompt
+# resolves against whatever scheme the terminal is running -- today
+# "Catppuccin Mocha (AA)" from windows/terminal/settings.json. Writing hex here
+# would mean a second copy of the palette that nothing keeps in step with the
+# first, and a prompt that stops matching the moment the scheme moves.
+palette = "terminal"
+
+# Colours only. A palette entry is a colour, not a style: starship resolves
+# "cyan" here but silently drops "bold cyan", leaving the module unstyled with
+# no error anywhere. Modifiers therefore live on the modules, as "bold path".
+[palettes.terminal]
+path = "cyan"
+vcs = "purple"
+vcs_state = "yellow"
+runtime_py = "yellow"
+runtime_node = "green"
+runtime_rust = "red"
+ok = "green"
+bad = "red"
+# bright-black, which that scheme raises to 5.81:1 against the background --
+# readable rather than merely present. It is still the least prominent colour
+# in the palette, which is all "dim" has to mean.
+dim = "bright-black"
+
 [character]
-success_symbol = "[❯](bold green)"
-error_symbol = "[❯](bold red)"
+success_symbol = "[❯](bold ok)"
+error_symbol = "[❯](bold bad)"
 
 [directory]
 truncation_length = 3
 truncate_to_repo = true
-style = "bold cyan"
+style = "bold path"
 
 [git_branch]
 symbol = " "
-style = "bold purple"
+style = "bold vcs"
 
 [git_status]
-style = "bold yellow"
+style = "bold vcs_state"
 # Only the actionable bits: conflicts, uncommitted changes, unpushed commits
 conflicted = "⚠"
 ahead = "⇡${count}"
@@ -33,25 +60,48 @@ modified = "!${count}"
 staged = "+${count}"
 stashed = "≡"
 
+# A space, not the default "." leader. Now that dim clears AA it is genuinely
+# legible, and a row of legible dots across every prompt is texture competing
+# with the output above it. The alignment is the point; the fill is not.
+[fill]
+symbol = " "
+style = "dim"
+
 # Runtimes only show up inside a project that uses them.
 # That way the prompt reflects what mise has actually activated.
 [python]
 symbol = " "
-style = "bold yellow"
+style = "bold runtime_py"
 format = '[$symbol$version]($style) '
 
 [nodejs]
 symbol = " "
-style = "bold green"
+style = "bold runtime_node"
 format = '[$symbol$version]($style) '
 
 [rust]
 symbol = " "
-style = "bold red"
+style = "bold runtime_rust"
 format = '[$symbol$version]($style) '
 
 # Warns when a command is slow: useful so you do not sit staring at the screen
 [cmd_duration]
 min_time = 2000
 format = "[took $duration]($style) "
-style = "bold yellow"
+style = "dim"
+
+# Disabled by default, which is why a failing command left no trace in the
+# prompt before. A non-zero exit is the one thing you most want to notice
+# without re-reading the scrollback.
+[status]
+disabled = false
+symbol = "✘"
+format = '[$symbol$status]($style) '
+style = "bold bad"
+
+# Backgrounded jobs are easy to forget and easy to leave running.
+[jobs]
+symbol = "⚙"
+style = "bold vcs_state"
+number_threshold = 1
+format = '[$symbol$number]($style) '
