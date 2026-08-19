@@ -963,3 +963,77 @@ the unblurred transparency profiles.defaults asks for.
 Cost if wrong: all of it is cosmetic and reversible in one file. The one thing
 that would not be caught by a check is taste, which is why the sizes are
 recorded here with what they were derived from.
+
+## After the palette -- decisions taken when a shared contract turned out to be one
+
+Ruling R42: R40 is reversed. The colour scheme goes back to canonical
+Catppuccin Mocha, and the contrast work it was doing moves into the files that
+own the colours.
+
+R40 moved three ANSI slots so that wsl/claude/statusline.sh would clear WCAG AA
+without changing statusline.sh. It reasoned that raising brightBlack "only
+costs its use as a background, which nothing here has". Something here had it.
+Claude Code's dark-ansi theme -- the theme this repo configured precisely so
+Claude would inherit the terminal's palette -- maps userMessageBackground,
+composerSidebarBackground and memoryBackgroundColor to ansi:blackBright and its
+text to ansi:whiteBright. Read out of the installed binary, measured against
+the live host scheme: 1.27:1. Expanding a tool result showed a grey box with
+nothing legible in it, which is how this was found.
+
+The mistake was not the value. It was treating a 16-colour palette as this
+repo's private setting. It is the contract every TUI on the machine reads, and
+two of its slots had quietly changed meaning: black became the background
+colour exactly, so ANSI-black text rendered at 1.00:1, and brightBlack rose
+into the ink half of the scale, so anything using it as the subtle fill it
+conventionally is drew light on light. Claude Code is simply the one that got
+noticed.
+
+So the rule that replaces it: a scheme guarantees each of its colours against
+ITS OWN BACKGROUND and guarantees nothing about any two of its colours
+together. Everything that needed a colour-on-colour pair has stopped asking for
+one.
+
+- statusline.sh drew powerline segments, which is a colour-on-colour pair by
+  construction. Against canonical Catppuccin its ink measured 4.33:1 on the
+  blue fill, 3.94:1 on the red and 1.37:1 on the grey. Redrawn as plain
+  coloured text, every colour it uses lands between 7.08:1 and 12.91:1 with no
+  tuning anywhere. The powerline renderer is deleted rather than kept behind
+  STYLE: a variant that cannot pass the repo's own contrast bar is not an
+  option, it is a trap. What falls out is the lean look wsl/starship.toml
+  already had, so the two halves of the screen now agree; the colour vocabulary
+  is deliberately shared with it (cyan for where you are, purple for version
+  control, yellow for its state, green and red for good and bad).
+- The dim slot is bright-white, not bright-black, in statusline.sh, its
+  subagent twin and starship. bright-black is 2.46:1 and is the slot a dark
+  scheme reserves for receding; everything these files call dim is a label read
+  at a glance. Catppuccin puts bright-white below white, which is what makes it
+  the one genuinely dim-but-legible colour here at 7.37:1. That inversion is
+  upstream's and is now asserted, because other schemes do the opposite.
+- Claude Code moves off dark-ansi to its own dark theme. This is the one place
+  no palette edit could have helped: canonical Catppuccin gives that panel
+  3.00:1, still under AA. An ansi theme delegates pairing to a palette that has
+  no pairing contract, so it cannot guarantee contrast on any scheme. The
+  vendor's dark theme carries explicit rgb() pairs designed together, confirmed
+  in the same binary.
+
+adjustIndistinguishableColors stays at "indexed". It was on, with the live host
+file confirmed rather than assumed, and it did not catch this -- which is the
+argument for keeping it as a net for third-party applications and never as the
+design.
+
+check.sh's contrast check is rewritten and widened: no background codes in the
+chrome at all, every foreground the two statuslines emit measured against the
+background, starship's palette measured the same way, and the slot roles
+asserted. Every assertion was broken on purpose and watched fail. Two of them
+were rewritten because of what that showed -- the first version tested that
+brightBlack was darker than brightWhite, and the original defect passed it,
+since #9399B2 is darker than #A6ADC8, just not by enough. The test that catches
+it compares distances: a fill must sit nearer the background than the ink sits
+to the fill. Canonical passes at 2.46 against 3.00, a thin margin and an honest
+one.
+
+Cost if wrong: the statusline look is a matter of taste and is the one thing
+here that is not measured. Reversing the palette is three hex values; reversing
+the statusline is a deleted renderer, recoverable from git. What must not be
+reversed piecemeal is the pair -- moving the palette back without restoring the
+powerline renderer would break Claude Code again, and check.sh now says so.

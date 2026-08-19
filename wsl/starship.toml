@@ -12,8 +12,8 @@ $directory$git_branch$git_status$python$nodejs$rust$fill$cmd_duration$status$job
 $character"""
 
 # Names, not colours. Every value below is an ANSI colour name, so the prompt
-# resolves against whatever scheme the terminal is running -- today
-# "Catppuccin Mocha (AA)" from windows/terminal/settings.json. Writing hex here
+# resolves against whatever scheme the terminal is running -- today canonical
+# "Catppuccin Mocha" from windows/terminal/settings.json. Writing hex here
 # would mean a second copy of the palette that nothing keeps in step with the
 # first, and a prompt that stops matching the moment the scheme moves.
 palette = "terminal"
@@ -30,10 +30,17 @@ runtime_node = "green"
 runtime_rust = "red"
 ok = "green"
 bad = "red"
-# bright-black, which that scheme raises to 5.81:1 against the background --
-# readable rather than merely present. It is still the least prominent colour
-# in the palette, which is all "dim" has to mean.
-dim = "bright-black"
+# NOT bright-black. In a dark scheme that slot is low-contrast by design
+# (2.46:1 here) -- it is what an application reaches for when it wants
+# something to recede, not something to be read. cmd_duration below is read.
+#
+# Catppuccin puts bright-white (subtext0) BELOW white (subtext1), so it is the
+# dimmer of the two light slots and still clears AA with room: 7.37:1. That is
+# the one place this palette offers a genuine "de-emphasised but legible", and
+# it is the same slot wsl/claude/statusline.sh uses for its labels, so the
+# prompt and the line above it recede by the same amount. check.sh asserts the
+# ordering holds, because it is Catppuccin's inversion and not a convention.
+dim = "bright-white"
 
 [character]
 success_symbol = "[❯](bold ok)"
@@ -60,9 +67,9 @@ modified = "!${count}"
 staged = "+${count}"
 stashed = "≡"
 
-# A space, not the default "." leader. Now that dim clears AA it is genuinely
-# legible, and a row of legible dots across every prompt is texture competing
-# with the output above it. The alignment is the point; the fill is not.
+# A space, not the default "." leader. A row of dots across every prompt is
+# texture competing with the output above it, and this prompt already has a
+# statusline overhead. The alignment is the point; the fill is not.
 [fill]
 symbol = " "
 style = "dim"
