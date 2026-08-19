@@ -21,12 +21,12 @@ NOW_MS=$((NOW * 1000))
 
 title() { printf '\n\033[1;34m══ %s\033[0m\n\n' "$1"; }
 show() {
-  printf '\033[90m%s\033[39m\n' "$1"
+  printf '\033[97m%s\033[39m\n' "$1"
   "$SL" <<< "$2"
   printf '\n\n'
 }
 
-# Payloads reused across both style variants.
+# Payload reused across the variants below.
 P_NORMAL="{
   \"cwd\":\"$HERE\",\"model\":{\"display_name\":\"Opus 5\"},
   \"workspace\":{\"current_dir\":\"$HERE\",\"project_dir\":\"$(dirname "$HERE")\"},
@@ -37,7 +37,7 @@ P_NORMAL="{
     \"seven_day\":{\"used_percentage\":31,\"resets_at\":$((NOW + 250000))}}
 }"
 
-title "main statusline — powerline style (the configured one)"
+title "main statusline"
 
 show "freshly opened session — no context or limits yet" "{
   \"cwd\":\"$HERE\",\"model\":{\"display_name\":\"Sonnet 5\"},
@@ -88,16 +88,10 @@ show "1M context window" "{
     \"seven_day\":{\"used_percentage\":88,\"resets_at\":$((NOW + 90000))}}
 }"
 
-title "the other variants (STYLE and LINES in the script)"
+title "the one-line variant (LINES in the script)"
 
-printf '\033[90mSTYLE=minimal\033[39m\n'
-STYLE=minimal "$SL" <<< "$P_NORMAL"
-printf '\n\n'
-printf '\033[90mLINES=1 STYLE=powerline\033[39m\n'
+printf '\033[97mLINES=1\033[39m\n'
 LINES=1 "$SL" <<< "$P_NORMAL"
-printf '\n\n'
-printf '\033[90mLINES=1 STYLE=minimal\033[39m\n'
-LINES=1 STYLE=minimal "$SL" <<< "$P_NORMAL"
 printf '\n\n'
 
 title "per-subagent statusline (agent panel)"
@@ -121,7 +115,7 @@ title "per-subagent statusline (agent panel)"
 ]}
 EOF
 
-printf '\n\033[90mthe third one has not moved a token in 15m: the flat sparkline exposes it\033[39m\n'
+printf '\n\033[97mthe third one has not moved a token in 15m: the flat sparkline exposes it\033[39m\n'
 
 title "bar scale"
 

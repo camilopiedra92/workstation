@@ -151,22 +151,46 @@ is bash syntax, not PowerShell, so a two-line `cp` silently copies nothing and
 prints the destination path as though it had worked.
 
 Keep the stock file first. Windows Terminal rewrites `settings.json` on its own,
-so this is the only copy of the default you will get:
+so this is the only copy of the default you will get — and the backup is
+guarded, because running this step a second time would otherwise overwrite the
+stock defaults with the customised file and destroy the thing it exists to
+preserve:
 
 ```powershell
 $wt = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
-Copy-Item "$wt\settings.json" "$wt\settings.json.stock-backup"
-Copy-Item .\windows\terminal\settings.json "$wt\settings.json" -Force
+if (-not (Test-Path "$wt\settings.json.stock-backup")) {
+  Copy-Item "$wt\settings.json" "$wt\settings.json.stock-backup"
+}
+```
+
+Then the copy itself. The source is an absolute UNC path into WSL, not a
+relative one: the repository is cloned inside Ubuntu and there is no copy of it
+on the Windows filesystem, so `.\windows\terminal\settings.json` resolves
+against whatever directory PowerShell happens to be in and fails. `\\wsl$\` is
+the same form `profiles.defaults.startingDirectory` already uses in the file
+being copied. Single quotes, because `$\` inside a double-quoted PowerShell
+string is a variable expansion:
+
+```powershell
+Copy-Item '\\wsl$\Ubuntu-26.04\home\camilo\workstation\windows\terminal\settings.json' "$wt\settings.json" -Force
 ```
 
 Then confirm it actually landed, rather than assuming:
 
 ```powershell
-Select-String -Path "$wt\settings.json" -Pattern "JetBrainsMono Nerd Font" | Measure-Object | Select-Object Count
+Select-String -Path "$wt\settings.json" -Pattern '#585B70' | Measure-Object | Select-Object -ExpandProperty Count
 ```
 
-Expected: `1` or more. **`0` means the copy did not happen** — that is exactly the
-failure this check exists to catch, and it is invisible otherwise.
+Expected: `2` — brightBlack and selectionBackground, both surface2. **`0` means
+the copy did not happen**, and that is exactly the failure this check exists to
+catch, since it is invisible otherwise.
+
+Match on a colour rather than on the font, which is what this check used to do.
+Once this step has run successfully even once, the deployed file already
+contains the font name, so a *later* failed copy still reports `1` and the check
+passes while nothing has landed. A pattern only tells you the copy happened if
+it is absent from what is already there -- so it has to move whenever the file
+does. Update it when the scheme changes.
 
 If the `LocalState` directory does not exist, Windows Terminal has not been
 launched since it was installed. Open it once, close it, try again.

@@ -60,8 +60,11 @@ jq -c -r '
 
   # ── Palette ────────────────────────────────────────────────────────────────
   # Same rule as the main statusline: never \u001b[0m, only \u001b[39m, so we
-  # do not cancel the style Claude applies from the outside.
-  "\u001b[90m" as $dim  | "\u001b[39m" as $fg
+  # do not cancel the style Claude applies from the outside. And the same $dim:
+  # bright-white (97), not bright-black (90), because 90 is the slot a dark
+  # scheme reserves for receding -- 2.46:1 here -- and everything $dim paints
+  # is a label read at a glance. See the palette note in statusline.sh.
+  "\u001b[97m" as $dim  | "\u001b[39m" as $fg
   | "\u001b[32m" as $green | "\u001b[33m" as $yellow | "\u001b[31m" as $red
   | "\u001b[36m" as $cyan
 

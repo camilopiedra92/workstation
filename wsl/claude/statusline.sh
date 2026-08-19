@@ -27,19 +27,40 @@
 #
 #   4. NEVER \033[0m. See the long note in the palette section.
 #
-# Colors are 16-color ANSI, not hex: that way the line inherits the palette of
-# the terminal's scheme (Catppuccin Mocha (AA)) and still matches if you ever
-# change it. That scheme moves two ANSI slots off canonical Catppuccin so that
-# every pair this file paints clears WCAG AA; the ratios are recorded beside
-# the colours in windows/terminal/settings.json and re-measured by check.sh.
+#   5. COLOUR ON THE TERMINAL BACKGROUND, NEVER COLOUR ON COLOUR. This is the
+#      rule that shapes how the line looks, so it is worth the paragraph.
+#
+#      A 16-colour scheme makes exactly one contrast guarantee: each of its
+#      colours is readable on its own background. It promises nothing about
+#      any two of its colours together. This file used to draw powerline
+#      segments -- coloured fills with dark ink -- which is asking for a
+#      colour-on-colour pair the palette never offered, and the numbers say
+#      so: against canonical Catppuccin, ink on the blue fill measured 4.33:1
+#      and on the red fill 3.94:1, both under WCAG AA, and the grey fill
+#      1.37:1. The earlier fix was to move ANSI slots in the terminal's scheme
+#      until those pairs passed. That worked here and broke the machine, since
+#      a palette is read by every TUI on it, not just by this script -- see
+#      the long note in windows/terminal/settings.json.
+#
+#      Drawn as plain coloured text instead, every colour this file uses lands
+#      between 7.08:1 and 12.91:1 with no tuning anywhere, and the scheme goes
+#      back to being upstream's. The look that falls out is the lean one the
+#      starship prompt below already had, so the two halves of the screen
+#      finally agree with each other.
+#
+# Colours are 16-colour ANSI, not hex, so the line inherits whatever scheme
+# the terminal runs -- today canonical Catppuccin Mocha. The vocabulary is
+# shared with wsl/starship.toml on purpose: cyan is where you are, purple is
+# version control, yellow is version-control state, green and red are good and
+# bad. Two prompts on one screen using one language. check.sh re-measures
+# every colour this file emits on every run.
 
 set -uo pipefail
 
 # ── Settings ─────────────────────────────────────────────────────────────────
 # Read from the environment when present, so statusline-demo.sh can render the
-# variants without touching this file.
-STYLE=${STYLE:-powerline} # powerline | minimal  (look of the identity line)
-LINES=${LINES:-2}         # 2 | 1                (1 = all together, short terminals)
+# one-line variant without touching this file.
+LINES=${LINES:-2} # 2 | 1  (1 = all together, for short terminals)
 
 # Counting untracked files toward the "dirty" marker forces git to walk the
 # whole tree, which is the expensive part in large repos. Set it to `normal` if
@@ -92,23 +113,28 @@ IFS=$'\037' read -r MODEL EFFORT CWD PROJDIR CTX_PCT CTX_IN CTX_MAX \
 # foreground and \033[49m the background, neither touches bold or dim, so they
 # compose with whatever Claude wraps around us. For the same reason there is no
 # bold: emphasis comes from color, which is reversible without side effects.
+#
+# DIM is bright-white, which reads like a contradiction and is not one.
+# Catppuccin puts bright-white (subtext0, #A6ADC8) BELOW white (subtext1,
+# #BAC2DE): it is the dimmer of the two light slots, and the only colour in
+# the scheme that is both clearly recessed and comfortably legible at 7.37:1.
+# The obvious candidate, bright-black, is 2.46:1 -- that slot exists to
+# recede, and everything DIM paints here (the ctx/5h/7d labels, the cost) is
+# text you read at a glance. check.sh asserts the ordering, because the
+# inversion is Catppuccin's and not a convention other schemes share.
 FG=$'\033[39m'
-BG=$'\033[49m'
-DIM=$'\033[90m'
+DIM=$'\033[97m'
 GREEN=$'\033[32m'
 YELLOW=$'\033[33m'
 RED=$'\033[31m'
 
-# Powerline separators. They need a Nerd Font (here, JetBrainsMono Nerd Font)
-# and are written as literal characters because bash 3.2 does not expand \u
-# inside $'...'.
-#
-# The thick one separates different colors. The thin one is needed when two
-# segments share a background: there the thick one would be drawn in the same
-# color as the background it falls on, would be invisible, and the two segments
-# would read as one.
-PL=''
-PL_THIN=''
+# The separator between items: a middle dot with a space either side, in DIM.
+# It is the lean equivalent of the powerline triangle this file used to draw,
+# and unlike the triangle it needs no Nerd Font at all. The glyphs that still
+# do are the per-item icons below, written as literal characters because bash
+# 3.2 does not expand \u inside $'...'. check.sh's one-nerd-font check is what
+# keeps the font declared everywhere this renders.
+SEP="${DIM} · ${FG}"
 
 printf -v NOW '%(%s)T' -1 2> /dev/null || NOW=$(date +%s)
 
@@ -197,24 +223,21 @@ k() {
 
 # ── Line 1: identity ─────────────────────────────────────────────────────────
 # Segments are accumulated first and painted afterwards, because powerline
-# needs to know the next segment's color to draw the separator (the triangle
-# takes the previous background as foreground and the next one as background;
-# that splice is what keeps the seam invisible).
-S_BG=()
-S_ACC=()
-S_INK=()
+# Each item is one colour and one string. There is no background and no
+# accent any more: the lean line paints coloured text on the terminal's own
+# background, which is the only pairing the scheme guarantees (design note 5).
+S_COL=()
 S_TXT=()
-seg() { # seg <background code> <same color as text> <ink on top> <content>
-  S_BG+=("$1")
-  S_ACC+=("$2")
-  S_INK+=("$3")
-  S_TXT+=("$4")
+seg() { # seg <ANSI foreground code> <content>
+  S_COL+=("$1")
+  S_TXT+=("$2")
 }
 
 # --- Model and effort ---
 body="󰚩 ${MODEL}"
 [ -n "$EFFORT" ] && body+=" ${EFFORT}"
-seg 45 35 30 "$body"
+# Blue: the agent itself. The only item that is not about the workspace.
+seg 34 "$body"
 
 # --- Location ---
 # Inside a project it shows the path relative to its root (`repo/src/api`).
@@ -227,7 +250,7 @@ else
 fi
 # Trimmed from the left: in a long path what locates you is the tail.
 [ ${#LOC} -gt $MAX_PATH ] && LOC="…${LOC: -$((MAX_PATH - 1))}"
-seg 44 34 30 " ${LOC}"
+seg 36 " ${LOC}" # cyan, the same "where you are" as starship's path
 
 # --- Git ---
 # A single call gives branch, state and distance from the remote. The output is
@@ -255,19 +278,26 @@ if [ -n "$BRANCH" ]; then
   # Branches with a ticket prefix run to 40 characters without breaking a sweat.
   [ ${#BRANCH} -gt $MAX_BRANCH ] && BRANCH="${BRANCH:0:$((MAX_BRANCH - 1))}…"
   body=" ${BRANCH}"
-  [ "$DIRTY" = 1 ] && body+="*"
+  # The name is purple; everything that says the branch is not clean is
+  # yellow, which is exactly the split starship draws with vcs / vcs_state.
+  # Colour is what carries it, so the markers stay terse.
+  ST=""
+  [ "$DIRTY" = 1 ] && ST+="*"
   # Commits of difference with the remote: the one bit of git state that tends
   # to surprise you mid-session.
   if [ -n "$AB" ]; then
     ahead=${AB%% *}
     behind=${AB##* }
-    [ "$ahead" != "+0" ] && body+=" ⇡${ahead#+}"
-    [ "$behind" != "-0" ] && body+=" ⇣${behind#-}"
+    [ "$ahead" != "+0" ] && ST+=" ⇡${ahead#+}"
+    [ "$behind" != "-0" ] && ST+=" ⇣${behind#-}"
   fi
-  seg 100 90 30 "$body"
+  # Reopening 35 after the yellow run keeps the item one colour again, so a
+  # later append cannot inherit the state colour by accident.
+  [ -n "$ST" ] && body+=$'\033[33m'"${ST}"$'\033[35m'
+  seg 35 "$body"
 fi
 
-[ -n "$WORKTREE" ] && seg 100 90 30 "⑂ ${WORKTREE}"
+[ -n "$WORKTREE" ] && seg 35 "⑂ ${WORKTREE}" # a worktree is version control too
 
 # --- Pull request ---
 # Only shows up if the branch has an open PR. The color is the review state:
@@ -275,41 +305,26 @@ fi
 # without switching windows.
 if [ "$PR_NUM" != "0" ]; then
   case $PR_STATE in
-    approved) seg 42 32 30 " #${PR_NUM}" ;;
-    changes_requested) seg 41 31 30 " #${PR_NUM}" ;;
-    *) seg 100 90 30 " #${PR_NUM}" ;;
+    approved) seg 32 " #${PR_NUM}" ;;
+    changes_requested) seg 31 " #${PR_NUM}" ;;
+    # Open but unreviewed is a fact, not a signal: it recedes.
+    *) seg 97 " #${PR_NUM}" ;;
   esac
 fi
 
 # --- Painting line 1 ---
+# One pass, one colour per item, separated by SEP. Each item closes with FG so
+# an item never bleeds its colour into the separator that follows it.
 L1=""
-n=${#S_BG[@]}
-if [ "$STYLE" = powerline ]; then
-  for ((i = 0; i < n; i++)); do
-    L1+=$'\033['"${S_BG[$i]};${S_INK[$i]}m ${S_TXT[$i]} "
-    # The separator inherits the next segment's background; on the last one it
-    # returns to the default background, which is what gives it a clean right edge.
-    if [ $((i + 1)) -lt "$n" ]; then
-      if [ "${S_BG[$i]}" = "${S_BG[$((i + 1))]}" ]; then
-        L1+=$'\033['"${S_INK[$i]}m${PL_THIN}"
-      else
-        L1+=$'\033['"${S_ACC[$i]};${S_BG[$((i + 1))]}m${PL}"
-      fi
-    else
-      L1+="${BG}"$'\033['"${S_ACC[$i]}m${PL}${FG}"
-    fi
-  done
-else
-  for ((i = 0; i < n; i++)); do
-    [ "$i" -gt 0 ] && L1+="${DIM} · ${FG}"
-    L1+=$'\033['"${S_ACC[$i]}m${S_TXT[$i]}${FG}"
-  done
-fi
+for ((i = 0; i < ${#S_COL[@]}; i++)); do
+  [ "$i" -gt 0 ] && L1+="$SEP"
+  L1+=$'\033['"${S_COL[$i]}m${S_TXT[$i]}${FG}"
+done
 
 # ── Line 2: gauges ───────────────────────────────────────────────────────────
 L2=""
 add() {
-  [ -n "$L2" ] && L2+="${DIM} · ${FG}"
+  [ -n "$L2" ] && L2+="$SEP"
   L2+="$1"
 }
 
@@ -352,11 +367,9 @@ add "$cost"
 if [ "$LINES" = 2 ] && [ -n "$L2" ]; then
   printf '%s\n%s' "$L1" "$L2"
 elif [ -n "$L2" ]; then
-  # On a single line powerline already closes with its triangle and adding a
-  # dot behind it looks like dirt; in minimal the separator is needed.
-  if [ "$STYLE" = powerline ]; then
-    printf '%s %s' "$L1" "$L2"
-  else printf '%s%s · %s%s' "$L1" "$DIM" "$FG" "$L2"; fi
+  # Folded onto one line the two halves need the same separator as everything
+  # else, or the seam between identity and gauges reads as a line break.
+  printf '%s%s%s' "$L1" "$SEP" "$L2"
 else
   printf '%s' "$L1"
 fi

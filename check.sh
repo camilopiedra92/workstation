@@ -295,17 +295,26 @@ else
   skip "windows terminal settings match the published schema" "jsonschema not installed"
 fi
 
-# --- The scheme is readable where this environment actually paints -----------
+# --- Every colour this environment paints is readable ------------------------
 # A colour scheme cannot be judged one colour at a time. What decides whether
 # text is readable is the PAIR: this ink, on that background. The schema check
 # above validates that every value is a colour; it has no opinion about whether
 # any of them can be read.
 #
-# So this reads the pairs out of statusline.sh itself -- its `seg <bg> <accent>
-# <ink>` calls are the exhaustive list of what the statusline paints -- maps the
-# ANSI codes back through the scheme, and measures each one. Same argument as
-# the one-nerd-font check: two files that have to agree, and nothing but a check
-# to notice when they stop agreeing.
+# This check exists because getting that wrong once cost a working terminal.
+# An earlier revision moved ANSI slots in the scheme so the statusline's
+# powerline segments -- coloured fill, dark ink -- would clear AA. The pairs
+# passed and the machine broke: a 16-colour palette is read by every TUI on
+# it, and two slots had quietly swapped meaning. Claude Code's dark-ansi theme
+# paints panels on ansi:blackBright with ansi:whiteBright text and rendered
+# them at 1.27:1, a grey box with nothing in it.
+#
+# So the rule this check enforces is the one that generalises: a scheme
+# guarantees each colour against ITS OWN BACKGROUND and nothing else. Read the
+# codes out of the shell files themselves -- they are the exhaustive list of
+# what gets painted -- and measure each against the background. Same argument
+# as the one-nerd-font check: files that have to agree, and nothing but a
+# check to notice when they stop.
 #
 # 4.5:1 is WCAG AA for normal text. Terminal text is normal text.
 scheme_contrast() {
@@ -313,6 +322,8 @@ scheme_contrast() {
 import json, re, sys
 
 STATUSLINE = 'wsl/claude/statusline.sh'
+SUBAGENT = 'wsl/claude/subagent-statusline.sh'
+STARSHIP = 'wsl/starship.toml'
 
 s = re.sub(r'^\s*//.*$', '', open('windows/terminal/settings.json', encoding='utf-8').read(), flags=re.M)
 s = re.sub(r',(\s*[}\]])', r'\1', s)
@@ -324,13 +335,19 @@ if scheme is None:
     sys.exit(1)
 
 # ANSI code -> scheme key. 39 and 49 are "default foreground/background", which
-# is what statusline.sh emits to step out of a colour without a full reset.
+# is what the shell files emit to step out of a colour without a full reset.
 NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
 CODE = {39: 'foreground', 49: 'background'}
 for i, n in enumerate(NAMES):
     bright = 'bright' + n[0].upper() + n[1:]
     CODE[30 + i] = CODE[40 + i] = n
     CODE[90 + i] = CODE[100 + i] = bright
+
+# starship spells the same slots in words.
+WORD = {'black': 'black', 'red': 'red', 'green': 'green', 'yellow': 'yellow',
+        'blue': 'blue', 'purple': 'purple', 'cyan': 'cyan', 'white': 'white'}
+for k in list(WORD):
+    WORD['bright-' + k] = 'bright' + k[0].upper() + k[1:]
 
 
 def lum(h):
@@ -348,37 +365,97 @@ def ratio(a, b):
 
 
 problems = []
-src = open(STATUSLINE, encoding='utf-8').read()
 
 
-def measure(what, fg_code, bg_code):
-    fk, bk = CODE.get(fg_code), CODE.get(bg_code)
-    if fk is None or bk is None:
-        problems.append('%s uses an ANSI code with no scheme colour: %s on %s'
-                        % (what, fg_code, bg_code))
-        return
-    r = ratio(scheme[fk], scheme[bk])
+def on_background(what, key):
+    r = ratio(scheme[key], scheme['background'])
     if r < 4.5:
-        problems.append('%s: %s %s on %s %s is %.2f:1, below WCAG AA 4.5:1'
-                        % (what, fk, scheme[fk], bk, scheme[bk], r))
+        problems.append('%s: %s %s on the background %s is %.2f:1, below WCAG AA 4.5:1'
+                        % (what, key, scheme[key], scheme['background'], r))
 
 
-# Every segment the statusline paints, read from the source of truth.
-segs = re.findall(r'seg (\d+) (\d+) (\d+)', src)
-if not segs:
-    problems.append('found no seg calls in %s -- has it been rewritten?' % STATUSLINE)
-for bg, _accent, ink in segs:
-    measure('statusline segment', int(ink), int(bg))
+# --- 1. No colour-on-colour anywhere. -----------------------------------------
+# A background code (40-47, 100-107) in a file that paints chrome means someone
+# has started asking the palette for a pair it does not guarantee. That is the
+# mistake this whole check was written after, so it is caught by shape rather
+# than by measuring the pair and hoping it happens to pass today.
+for path in (STATUSLINE, SUBAGENT):
+    src = open(path, encoding='utf-8').read()
+    bg = re.findall(r'\\(?:033|u001b)\[(4[0-7]|10[0-7])m', src)
+    if bg:
+        problems.append('%s sets a background colour (%s): chrome here is coloured text on the '
+                        "terminal's own background, which is the only pair the scheme guarantees"
+                        % (path, ', '.join(sorted(set(bg)))))
 
-# The dimmed text: labels, separators, the second line's chrome. One slot, and
-# the one most often read at a glance.
-dim = re.search(r"DIM=\$'\\033\[(\d+)m'", src)
-if dim:
-    measure('statusline DIM', int(dim.group(1)), 49)
+# --- 2. Every foreground the statuslines emit, against the background. --------
+for path in (STATUSLINE, SUBAGENT):
+    src = open(path, encoding='utf-8').read()
+    codes = {int(c) for c in re.findall(r'\\(?:033|u001b)\[(\d+)m', src)}
+    codes |= {int(c) for c in re.findall(r'^\s*seg (\d+) ', src, flags=re.M)}
+    codes -= {39, 49, 0}  # selective resets, not colours
+    if not codes:
+        problems.append('found no colour codes in %s -- has it been rewritten?' % path)
+    for c in sorted(codes):
+        if c not in CODE:
+            problems.append('%s emits ANSI %d, which is not a scheme colour' % (path, c))
+        else:
+            on_background('%s ANSI %d' % (path, c), CODE[c])
+
+# --- 3. starship's palette, which spells the same slots in words. -------------
+toml = open(STARSHIP, encoding='utf-8').read()
+pal = re.search(r'^\[palettes\.terminal\]\n(.*?)(?=^\[)', toml, flags=re.M | re.S)
+if not pal:
+    problems.append('no [palettes.terminal] in %s -- has it been rewritten?' % STARSHIP)
 else:
-    problems.append('could not find DIM in %s' % STATUSLINE)
+    entries = re.findall(r'^(\w+)\s*=\s*"([^"]+)"', pal.group(1), flags=re.M)
+    if not entries:
+        problems.append('[palettes.terminal] in %s defines no colours' % STARSHIP)
+    for name, value in entries:
+        if value not in WORD:
+            problems.append('%s: palette entry %s = %r is not a plain ANSI colour name, so it '
+                            'cannot be measured against the scheme' % (STARSHIP, name, value))
+        else:
+            on_background('%s palette %s' % (STARSHIP, name), WORD[value])
 
-# The scheme's own defaults, and text sitting on a selection.
+# --- 4. The slot ordering the "dim" choice depends on. ------------------------
+# Catppuccin puts brightWhite BELOW white, which is what makes brightWhite the
+# one genuinely dim-but-legible slot -- the reason statusline.sh, its subagent
+# twin and starship all use it. Other schemes do the opposite. If this scheme
+# ever stops inverting them, "dim" silently becomes the brightest thing on the
+# line and the hierarchy inverts with it.
+if lum(scheme['brightWhite']) >= lum(scheme['white']):
+    problems.append('brightWhite %s is not dimmer than white %s: the files that use bright-white '
+                    'as their dim slot are relying on this scheme inverting the two'
+                    % (scheme['brightWhite'], scheme['white']))
+# And the dark end, which is what an application means by "a fill just off the
+# background". Equal to the background is the specific failure that made
+# ANSI-black text disappear.
+for k in ('black', 'brightBlack'):
+    if scheme[k].lower() == scheme['background'].lower():
+        problems.append('%s is the background colour exactly, so anything printing text in it '
+                        'renders at 1.00:1' % k)
+# The role invariant, and the one that actually catches the defect. ANSI 0 and
+# 8 are fills in a dark scheme; 7 and 15 are ink. A fill has to sit nearer the
+# background than the ink sits to the fill -- otherwise it has drifted up into
+# the ink's half of the scale and anything using it as a panel draws
+# light-on-light. Note what does NOT work here, because it was tried and
+# watched pass: comparing luminances, or the midpoint between background and
+# foreground. The defect that started all this (brightBlack at overlay2
+# #9399B2) is still nominally darker than brightWhite and still below the
+# midpoint -- it fails only on this ratio, 5.81:1 to the background against
+# 1.27:1 to the ink. Canonical Catppuccin passes at 2.46 against 3.00, which
+# is a thin margin and an honest one: its greys are light for a dark scheme.
+for fill in ('black', 'brightBlack'):
+    to_bg = ratio(scheme[fill], scheme['background'])
+    for ink in ('white', 'brightWhite'):
+        to_ink = ratio(scheme[ink], scheme[fill])
+        if to_bg >= to_ink:
+            problems.append('%s %s is %.2f:1 from the background but only %.2f:1 from %s: it has '
+                            'left the dark half of the scale, so anything using it as a panel '
+                            'fill draws light text on a light fill'
+                            % (fill, scheme[fill], to_bg, to_ink, ink))
+
+# --- 5. The scheme's own defaults, and text sitting on a selection. -----------
 if ratio(scheme['foreground'], scheme['background']) < 4.5:
     problems.append('foreground on background is %.2f:1, below 4.5:1'
                     % ratio(scheme['foreground'], scheme['background']))
@@ -393,9 +470,9 @@ sys.exit(1 if problems else 0)
 PYEOF
 }
 if have "$PYTHON"; then
-  check "the scheme is readable where this environment paints" scheme_contrast
+  check "every colour this environment paints is readable" scheme_contrast
 else
-  skip "the scheme is readable where this environment paints" "python3 not installed"
+  skip "every colour this environment paints is readable" "python3 not installed"
 fi
 
 # --- Every action id and keybinding id resolve to each other -----------------

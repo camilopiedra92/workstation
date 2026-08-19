@@ -97,11 +97,9 @@
         // (font.cellHeight, a CSSLengthPercentage) before being written.
         "cellHeight": "120%"
       },
-      // Catppuccin Mocha with two ANSI slots reassigned so every foreground
-      // this environment actually paints clears WCAG AA. See the scheme below
-      // for the measurements; the name carries the "(AA)" because the result
-      // is no longer canonical Catppuccin and should not claim to be.
-      "colorScheme": "Catppuccin Mocha (AA)",
+      // Canonical Catppuccin Mocha, unmodified. See the scheme below for why
+      // it is canonical rather than tuned, and where the tuning went instead.
+      "colorScheme": "Catppuccin Mocha",
       // Windows Terminal's counterpart to Ghostty's minimum-contrast, which
       // the header of this file used to say did not exist. "indexed" adjusts
       // only colours that came from the scheme -- which is every colour the
@@ -160,27 +158,46 @@
 
   "schemes": [
     {
-      // Catppuccin Mocha, three values moved. Every replacement is another
-      // colour from Catppuccin's own ramp -- nothing here is invented.
+      // Catppuccin Mocha, verbatim from catppuccin/windows-terminal. Nothing
+      // here is local. That is the point, and it was learned the hard way.
       //
-      // Ratios below are against this scheme's own background (#1E1E2E),
-      // computed with the WCAG relative-luminance formula. check.sh recomputes
-      // them on every run, so these numbers cannot quietly go stale.
-      "name": "Catppuccin Mocha (AA)",
+      // An earlier revision of this file moved three slots -- black to base,
+      // brightBlack to overlay2, selectionBackground to surface1 -- to make
+      // wsl/claude/statusline.sh clear WCAG AA without touching that file. It
+      // worked there and broke elsewhere, because a 16-colour palette is not
+      // this repo's private setting: it is the contract every TUI on the
+      // machine reads. Two slots inverted their meaning. black became the
+      // background colour exactly (1.00:1, so ANSI-black text vanished), and
+      // brightBlack rose above brightWhite, so any application using it for
+      // the subtle background it conventionally is drew light-on-light.
+      // Claude Code was the one that got noticed: its dark-ansi theme paints
+      // three panels on ansi:blackBright with ansi:whiteBright text, which
+      // measured 1.27:1 -- a grey box with nothing legible in it.
+      //
+      // The rule that replaces the old rationale: a scheme guarantees exactly
+      // one thing, that each of its colours is readable ON ITS OWN
+      // BACKGROUND. Every ratio below is that measurement. It guarantees
+      // nothing about colour-on-colour, so nothing in this repo may ask it
+      // for a colour-on-colour pair -- see the note at the top of
+      // wsl/claude/statusline.sh, which no longer does.
+      //
+      // Ratios are against this scheme's own background (#1E1E2E), computed
+      // with the WCAG relative-luminance formula. check.sh recomputes them on
+      // every run, so these numbers cannot quietly go stale.
+      "name": "Catppuccin Mocha",
 
       "cursorColor": "#F5E0DC",
-      // surface1, was surface2. Text over a selection went 4.62 -> 6.31:1.
-      "selectionBackground": "#45475A",
+      // surface2. Default foreground over a selection: 4.62:1, clears AA.
+      "selectionBackground": "#585B70",
 
       "background": "#1E1E2E",
       "foreground": "#CDD6F4",
 
-      // base, was surface1. In a dark scheme ANSI black is almost never text
-      // on the background -- it is the ink on top of the bright powerline
-      // segments the statusline draws. Taking it all the way down to the
-      // background colour makes it a better ink (worst segment pair 3.94 ->
-      // 5.81:1) and only costs its use as a background, which nothing here has.
-      "black": "#1E1E2E",
+      // surface1. In a dark scheme ANSI black is a subtle background, not
+      // text; upstream places it one step above the background for exactly
+      // that. adjustIndistinguishableColors is the net for anything that
+      // prints text in it anyway.
+      "black": "#45475A",
       "red": "#F38BA8",
       "green": "#A6E3A1",
       "yellow": "#F9E2AF",
@@ -189,19 +206,25 @@
       "cyan": "#94E2D5",
       "white": "#BAC2DE",
 
-      // overlay2, was surface2. This is the single slot the whole environment
-      // means by "dimmed": statusline labels, starship's separators, git's
-      // hints. At surface2 it measured 2.46:1 -- below AA, on the text most
-      // often read at a glance. overlay2 brings it to 5.81:1 and stays
-      // recognisably a grey. The dimmed look is now carried by hue, not by
-      // being too dark to read.
-      "brightBlack": "#9399B2",
+      // surface2. This is the low-contrast slot by design -- 2.46:1 against
+      // the background -- and that is what every application means when it
+      // reaches for it, whether as a de-emphasised foreground or as a panel
+      // fill one step off the background. Nothing in this repo prints text
+      // that has to be read in it; check.sh enforces that.
+      "brightBlack": "#585B70",
       "brightRed": "#F38BA8",
       "brightGreen": "#A6E3A1",
       "brightYellow": "#F9E2AF",
       "brightBlue": "#89B4FA",
       "brightPurple": "#F5C2E7",
       "brightCyan": "#94E2D5",
+      // subtext0, and note that upstream puts it BELOW white (subtext1,
+      // #BAC2DE): in this scheme brightWhite is the dimmer of the two light
+      // slots, not the brighter. That inversion is Catppuccin's, not ours,
+      // and it is load-bearing -- it is the only slot that is both clearly
+      // de-emphasised and comfortably readable (7.37:1), which is what
+      // statusline.sh uses for its labels. check.sh asserts the ordering so
+      // that a future scheme cannot silently take it away.
       "brightWhite": "#A6ADC8"
     }
   ],
