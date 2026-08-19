@@ -832,3 +832,54 @@ change went in through a pull request once both checks were green.
 Cost if wrong: an emergency fix needs a pull request, or one deliberate
 disable that is visible afterwards. On a repository whose whole subject is
 that a declaration should mean what it says, that is the cheaper side.
+
+Ruling R39: the container runtime is Docker Engine CE, installed inside Ubuntu
+from Docker's own apt repository and declared here; Docker Desktop is
+uninstalled from the Windows host and stays absent from
+windows/configuration.winget.
+
+Why: `ubuntu-latest` runners ship Docker Server -- moby, the same daemon
+`apt install docker-ce` provides. There is no Docker Desktop anywhere in CI, so
+Desktop was the only point in the dev-CI-prod line running a different
+architecture. It also cost a second WSL distro, bind mounts that left ext4 to
+reach a VM, and a licence threshold at 250 employees or $10M revenue. Measured
+before removing it rather than argued: its daemon was Stopped, AutoStart was
+false, WSL integration was off, its ext4.vhdx was 117 MB, and no project in
+~/Development had a Dockerfile. It was providing nothing.
+
+Podman was considered and rejected, on one condition rather than on merit: it
+is the better design -- daemonless, rootless by default, no root-equivalent
+group -- and it is the wrong choice here only because CI is Docker. If CI or a
+deployment target moves to Podman or OpenShift, this ruling should be revisited
+rather than defended.
+
+Rootful rather than rootless, deliberately. This machine could run rootless --
+cgroup v2, systemd running, and cpu/memory/pids already delegated to user.slice,
+which is the delegation that usually blocks resource limits. It is not worth it
+here: rootless swaps the network stack for slirp4netns/pasta and blocks ports
+below 1024, breaking the CI parity that is this ruling's entire argument, to
+close an escalation path inside a disposable WSL distro that is already isolated
+from the host. Membership of the `docker` group is root-equivalent by design --
+stated here rather than left implicit.
+
+The repository key is vendored at wsl/apt/docker.asc instead of curled at
+install time, and the repository itself is a checked-in deb822 file. ci.yml
+already refuses to run a binary it has not verified; a key fetched over the
+network and trusted because it arrived is the same gap one layer down. Verified
+when added: fingerprint 9DC858229FC7DD38854AE2D88D81803C0EBFCD88, uid "Docker
+Release (CE deb) <docker@docker.com>", matching the fingerprint Docker
+publishes. Suites is pinned to `resolute` rather than read from /etc/os-release,
+so a release upgrade becomes an edit somebody reviews instead of a silent
+repoint.
+
+Found by drift.sh, which is the part worth keeping. The five packages were
+installed by hand first, and the next run reported them under "manually
+installed but not in wsl/apt-packages.txt" with no change to the script. The
+detector earned its keep on the first real drift it was given.
+
+Cost if wrong: Compose is the live gap -- 5.x here against 2.38.x on the
+runner, a wider split than Engine's 29 against 28. A compose file using v5
+syntax passes locally and fails in CI, and the fix is to pin Compose in the
+workflow rather than take the runner's. Beyond that, reversing this ruling means
+reinstalling Docker Desktop and enabling WSL integration, which is a download
+and two clicks; nothing here is one-way.

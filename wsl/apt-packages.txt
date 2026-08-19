@@ -50,3 +50,24 @@ python3-yaml
 # applications and because the gate on every commit should not depend on a
 # package manager the gate is also checking.
 python3-jsonschema
+
+# Docker Engine. This is the one group here that does NOT come from Ubuntu's
+# archive: it comes from Docker's own repository, which wsl/install.sh registers
+# from wsl/apt/docker.sources before it reads this file. Adding a name here
+# without that step produces an installer that works on this machine and fails
+# on a clean one, which is the failure this repo exists to prevent.
+#
+# It passes apt-packages.txt's own test -- would this still need to exist if you
+# never opened a terminal? dockerd is a system daemon under systemd, so yes.
+# mise cannot install it and should not: mise pins per-project tooling in $HOME,
+# not services with a unit file, cgroups and a socket in /var/run.
+#
+# Docker Desktop is deliberately absent from windows/configuration.winget, and
+# docs/decisions.md records why. The short version: GitHub Actions runners carry
+# this same daemon, so a native Engine is the only arrangement where dev and CI
+# run the same software.
+docker-ce
+docker-ce-cli
+containerd.io
+docker-buildx-plugin
+docker-compose-plugin
