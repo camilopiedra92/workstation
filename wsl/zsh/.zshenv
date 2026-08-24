@@ -35,9 +35,14 @@ export ZDOTDIR="$XDG_CONFIG_HOME/zsh"
 # read twice.
 typeset -U path PATH
 
+# The AI Pods toolchain installs into the home and appends its PATH line to
+# ~/.zshrc -- a file ZDOTDIR makes dead here, so the entries are claimed below
+# instead and the stray file is removed after each install.
 path=(
   "$HOME/.local/bin"
   "$XDG_DATA_HOME/mise/shims"
+  "$HOME/.coda/bin"
+  "$HOME/.stepwise/bin"
   $path
 )
 export PATH
