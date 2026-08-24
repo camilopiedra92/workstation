@@ -55,9 +55,19 @@ description: Use when spawning subagents or forks, splitting a plan across agent
   one. Verify before trusting either.
 - The reviewer gets deliberately clean context: a cold agent that sees the
   diff and the criteria, not the reasoning that produced the change. The
-  author's context inherits the author's blind spots. A different model
-  family is a stronger independent check than a fresh session of the same
-  model, when one is available.
+  author's context inherits the author's blind spots.
+- Clean context is what buys the independence; a different model family adds
+  to it, and costs far more. So order the choice by price: default to the
+  cheapest model that can actually do this review's task, and spend a premium
+  family only where the verdict turns on judgement a cheaper reviewer
+  demonstrably got wrong. Never pre-emptively, and never merely because the
+  premium one is available.
+- Never hedge one reviewer with another. Two cold agents under the SAME
+  mandate is one review run twice: it doubles the cost and leaves the author
+  arbitrating their disagreement, which is precisely the job a review exists
+  to take off the author. Two reviewers earn their keep only when the
+  mandates DIFFER -- one digging through the evidence, one judging the diff
+  -- and each mandate then has to say which half it owns.
 - Scope the mandate explicitly: flag only what affects correctness or the
   stated requirements; everything else is optional. A reviewer told to find
   gaps will find some even in sound work, and chasing every finding produces
