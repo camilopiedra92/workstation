@@ -68,6 +68,19 @@ description: Use when spawning subagents or forks, splitting a plan across agent
   to take off the author. Two reviewers earn their keep only when the
   mandates DIFFER -- one digging through the evidence, one judging the diff
   -- and each mandate then has to say which half it owns.
+- **Two reviewers on one working tree collide if either one writes.** A
+  mutation-running reviewer dirties `src/` and restores it; a reviewer reading
+  the same tree sees a transient defect and reports a red suite that is the
+  first reviewer's, not the branch's. Either serialise them, give the writer
+  its own worktree, or tell the reader that a red test may be somebody else's
+  mutation and to check `git status` before believing one. Cheapest is the
+  last, and it has to be said BEFORE they start — a false finding costs more
+  to arbitrate than the warning costs to send.
+- **Ask the reviewer to RUN the mutations, not to read for them.** A reviewer
+  that reads reports suspicions; one that mutates reports whether a test dies
+  and which. The difference showed on 2026-09-07: three rounds of reading had
+  missed a guard that was protected by evaluation order rather than by
+  anything it did, and one mutation found it in a minute.
 - Scope the mandate explicitly: flag only what affects correctness or the
   stated requirements; everything else is optional. A reviewer told to find
   gaps will find some even in sound work, and chasing every finding produces
