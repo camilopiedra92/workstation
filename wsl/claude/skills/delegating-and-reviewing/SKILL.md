@@ -43,6 +43,24 @@ description: Use when spawning subagents or forks, splitting a plan across agent
   Check the file exists before acting on it. The message is the notification;
   the file is the artefact. Put it where the project keeps that kind of
   record.
+- **"Every" includes reviewers.** Read as advice for implementers, this rule
+  gets broken the first time a reviewer is dispatched -- a review feels like
+  an answer, not an artefact. A reviewer told to return its verdict as its
+  final message ran 25 minutes and delivered nothing; a status message got no
+  reply either; a fresh one told to WRITE A FILE delivered. Say in the
+  dispatch: "this file IS your deliverable, write it complete in one call as
+  the last thing you do", and have it return only the verdict lines.
+- The file is also how you wait. Block on the artefact appearing
+  (`until [ -f <path> ]; do sleep 15; done`) rather than polling a message
+  channel: it survives the agent dying, and it stays out of your context
+  until you choose to read it.
+- **An agent can die mid-task** -- a session limit, a crash -- leaving
+  uncommitted work and no report. That tree is ambiguous: partially-applied
+  work and a mutation nobody reverted look identical to `git status`, and
+  these workflows deliberately mutate source to watch a test fail. Read the
+  diff as prose before anything else, back the tree up outside the repo, and
+  tell the next agent exactly what is already done. Never resolve it with
+  `git checkout`/`stash`/`restore`/`clean`.
 
 ## The pre-merge review
 
