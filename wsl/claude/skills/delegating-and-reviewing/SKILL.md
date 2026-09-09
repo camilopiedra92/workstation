@@ -50,6 +50,18 @@ description: Use when spawning subagents or forks, splitting a plan across agent
   reply either; a fresh one told to WRITE A FILE delivered. Say in the
   dispatch: "this file IS your deliverable, write it complete in one call as
   the last thing you do", and have it return only the verdict lines.
+- **An agent can also die to a session or rate limit, and then it delivers
+  nothing at all.** Four reviewers were dispatched on 2026-09-09 and all four
+  were terminated mid-run: four worktrees, zero reports. Isolation held, so
+  nothing was corrupted -- the whole cost was the work. Three lines in the
+  prompt prevented it on the retry, and all four delivered:
+  *"if you sense you are running low on budget, STOP and write your report file
+  immediately, marking unfinished questions as not reached"* -- a partial report
+  is worth enormously more than none; *"do not read <the big context file> end
+  to end, grep it for these terms"* -- four agents each ingesting a
+  thousand-line house document is a large fraction of the budget spent before
+  the first test; and *"do not run the full suite, run only these files"*.
+  Check when the limit resets before relaunching, or you kill them again.
 - The file is also how you wait. Block on the artefact appearing
   (`until [ -f <path> ]; do sleep 15; done`) rather than polling a message
   channel: it survives the agent dying, and it stays out of your context
@@ -99,6 +111,12 @@ description: Use when spawning subagents or forks, splitting a plan across agent
   and which. The difference showed on 2026-09-07: three rounds of reading had
   missed a guard that was protected by evaluation order rather than by
   anything it did, and one mutation found it in a minute.
+- **Tell them to confirm a mutation actually changes behaviour before concluding
+  a guard is unprotected.** A mutation that moves a pure expression rather than a
+  decision is equivalent by construction: it "survives", and reads exactly like a
+  real finding. Two false holes were nearly reported that way in one session, and
+  the sibling failure is a search-and-replace whose pattern did not match -- it
+  edits nothing, the tests pass, and that also looks like a survivor.
 - Scope the mandate explicitly: flag only what affects correctness or the
   stated requirements; everything else is optional. A reviewer told to find
   gaps will find some even in sound work, and chasing every finding produces
