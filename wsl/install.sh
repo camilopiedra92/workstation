@@ -163,6 +163,14 @@ if [ -L "$HOME/.claude/skills" ]; then
   rm "$HOME/.claude/skills"
   echo "    unlinked the whole-directory skills layout: $HOME/.claude/skills"
 fi
+# This is the one destination created with mkdir instead of link(), so it does
+# not inherit link()'s backup of a real file standing in the way -- and mkdir
+# on a regular file fails and aborts the whole run under `set -e`. Back it up
+# on the same terms link() would: moved with a timestamp, never deleted.
+if [ -e "$HOME/.claude/skills" ] && [ ! -d "$HOME/.claude/skills" ]; then
+  mv "$HOME/.claude/skills" "$HOME/.claude/skills.backup.$(date +%Y%m%d%H%M%S)"
+  echo "    backed up: $HOME/.claude/skills"
+fi
 mkdir -p "$HOME/.claude/skills"
 for skill in "$WSL_DIR"/claude/skills/*/; do
   # The glob is left literal when it matches nothing, and an unexpanded path
