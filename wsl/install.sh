@@ -135,13 +135,49 @@ link "$WSL_DIR/claude/statusline.sh" "$HOME/.claude/statusline.sh"
 link "$WSL_DIR/claude/subagent-statusline.sh" "$HOME/.claude/subagent-statusline.sh"
 link "$WSL_DIR/claude/guard-bash.sh" "$HOME/.claude/guard-bash.sh"
 link "$WSL_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
-# The skills directory is linked whole, not per file: a new skill is then one
-# directory in the repo rather than a directory plus a line here, and the two
-# cannot drift. The deliberate consequence: this repo is the ONLY home for
-# skills on this machine. A skill dropped into ~/.claude/skills by hand gets
-# displaced (backed up, not deleted) on the next run -- version it here
-# instead.
-link "$WSL_DIR/claude/skills" "$HOME/.claude/skills"
+# Skills are linked one directory at a time, and the glob is what keeps the
+# property the whole-directory link was written for: a new skill is one
+# directory in the repo, with no line to add here, so the two cannot drift.
+#
+# The directory itself is NOT linked, because Claude Code owns that path and
+# writes into it. It syncs the account's own skills there -- on 2026-09-23,
+# skills/synced/ held a manifest, a .bucket-<account>_<org> marker and 18
+# skills, 11 MB. Linking the directory whole made this repo the owner of a
+# path the tool writes to, so that bucket landed in the working tree and
+# failed check.sh's "every skill names itself and says when to fire": it is a
+# bucket of skills, not a skill, and no repo-side check could honestly call it
+# one.
+#
+# What that costs, stated rather than hidden: the old layout enforced "this
+# repo is the only home for skills on this machine" as a side effect of owning
+# the directory, displacing a hand-dropped skill on the next run. Per-skill
+# links give that up -- a skill dropped into ~/.claude/skills by hand now
+# survives unversioned instead of being displaced into a timestamped backup.
+# That is the better failure of the two, and the repo side is still gated:
+# every directory under claude/skills/ must be a real skill, and every one of
+# them must arrive in ~/.claude/skills as a link to this repo.
+#
+# A symlink at the destination is the old layout (or points elsewhere
+# entirely); linking through it would write the links back into the repo.
+if [ -L "$HOME/.claude/skills" ]; then
+  rm "$HOME/.claude/skills"
+  echo "    unlinked the whole-directory skills layout: $HOME/.claude/skills"
+fi
+# This is the one destination created with mkdir instead of link(), so it does
+# not inherit link()'s backup of a real file standing in the way -- and mkdir
+# on a regular file fails and aborts the whole run under `set -e`. Back it up
+# on the same terms link() would: moved with a timestamp, never deleted.
+if [ -e "$HOME/.claude/skills" ] && [ ! -d "$HOME/.claude/skills" ]; then
+  mv "$HOME/.claude/skills" "$HOME/.claude/skills.backup.$(date +%Y%m%d%H%M%S)"
+  echo "    backed up: $HOME/.claude/skills"
+fi
+mkdir -p "$HOME/.claude/skills"
+for skill in "$WSL_DIR"/claude/skills/*/; do
+  # The glob is left literal when it matches nothing, and an unexpanded path
+  # is not a directory.
+  [ -d "$skill" ] || continue
+  link "${skill%/}" "$HOME/.claude/skills/$(basename "$skill")"
+done
 
 # git reads ~/.gitconfig AND ~/.config/git/config, and the legacy file wins. A
 # leftover there means the linked config is read and then overruled.

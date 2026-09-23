@@ -1370,7 +1370,7 @@ have_symlinks() {
 }
 
 install_is_idempotent() {
-  local tmphome first second status=0
+  local tmphome first second status=0 skill dest
   tmphome=$(mktemp -d)
 
   first=$(HOME="$tmphome" \
@@ -1410,6 +1410,28 @@ install_is_idempotent() {
     status=1
   fi
 
+  # Skills are linked one at a time into a directory this repo does not own,
+  # because Claude Code syncs the account's own skills into ~/.claude/skills
+  # and a whole-directory link put that bucket in the working tree. So the
+  # claim is narrower than "the link exists": the destination is a real
+  # directory, and every skill the repo authors arrives in it as a link back
+  # here. Asserted against the temporary HOME for the same reason the guard
+  # is -- the real install script just ran against it.
+  if [ -L "$tmphome/.claude/skills" ]; then
+    echo "the skills destination is a link, so the tool's synced skills land in this repo"
+    status=1
+  fi
+  for skill in wsl/claude/skills/*/; do
+    dest="$tmphome/.claude/skills/$(basename "${skill%/}")"
+    if [ ! -L "$dest" ]; then
+      echo "install.sh did not link ${skill%/} into ~/.claude/skills"
+      status=1
+    elif [ "$(readlink -f "$dest")" != "$(readlink -f "${skill%/}")" ]; then
+      echo "$dest resolves to $(readlink -f "$dest"), not to ${skill%/}"
+      status=1
+    fi
+  done
+
   rm -rf "$tmphome"
   return "$status"
 }
@@ -1417,6 +1439,53 @@ if have_symlinks; then
   check "install.sh --links-only is idempotent" install_is_idempotent
 else
   skip "install.sh --links-only is idempotent" "this filesystem does not support symlinks"
+fi
+
+# ~/.claude/skills is the one destination install.sh creates with mkdir instead
+# of link(), because the tool owns that directory and only the skills inside it
+# are linked. link()'s backup of a real file in the way therefore does not
+# cover it, and mkdir on a regular file aborts the whole run. The branch that
+# handles it is three lines nothing else exercises, so the file is planted here
+# rather than reasoned about.
+install_backs_up_a_stray_skills_file() {
+  local tmphome out backup status=0
+  tmphome=$(mktemp -d)
+  mkdir -p "$tmphome/.claude"
+  echo "a regular file, not a directory" > "$tmphome/.claude/skills"
+
+  out=$(HOME="$tmphome" \
+    XDG_CONFIG_HOME="$tmphome/.config" \
+    XDG_DATA_HOME="$tmphome/.local/share" \
+    XDG_STATE_HOME="$tmphome/.local/state" \
+    ./wsl/install.sh --links-only 2>&1) || {
+    echo "install.sh aborted on a regular file at the skills destination:"
+    echo "$out"
+    rm -rf "$tmphome"
+    return 1
+  }
+
+  if [ ! -d "$tmphome/.claude/skills" ] || [ -L "$tmphome/.claude/skills" ]; then
+    echo "the skills destination is not a real directory after the install"
+    status=1
+  fi
+
+  # Moved, not truncated: the backup has to still carry the bytes.
+  backup=$(find "$tmphome/.claude" -maxdepth 1 -type f -name 'skills.backup.*')
+  if [ -z "$backup" ]; then
+    echo "the stray file was not backed up"
+    status=1
+  elif ! grep -q 'a regular file, not a directory' "$backup"; then
+    echo "$backup does not carry the bytes of the file it replaced"
+    status=1
+  fi
+
+  rm -rf "$tmphome"
+  return "$status"
+}
+if have_symlinks; then
+  check "a stray file at the skills destination is backed up" install_backs_up_a_stray_skills_file
+else
+  skip "a stray file at the skills destination is backed up" "this filesystem does not support symlinks"
 fi
 
 # --- Summary -----------------------------------------------------------------
