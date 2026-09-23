@@ -1370,7 +1370,7 @@ have_symlinks() {
 }
 
 install_is_idempotent() {
-  local tmphome first second status=0
+  local tmphome first second status=0 skill dest
   tmphome=$(mktemp -d)
 
   first=$(HOME="$tmphome" \
@@ -1409,6 +1409,28 @@ install_is_idempotent() {
     echo "install.sh --links-only did not link guard-bash.sh into ~/.claude"
     status=1
   fi
+
+  # Skills are linked one at a time into a directory this repo does not own,
+  # because Claude Code syncs the account's own skills into ~/.claude/skills
+  # and a whole-directory link put that bucket in the working tree. So the
+  # claim is narrower than "the link exists": the destination is a real
+  # directory, and every skill the repo authors arrives in it as a link back
+  # here. Asserted against the temporary HOME for the same reason the guard
+  # is -- the real install script just ran against it.
+  if [ -L "$tmphome/.claude/skills" ]; then
+    echo "the skills destination is a link, so the tool's synced skills land in this repo"
+    status=1
+  fi
+  for skill in wsl/claude/skills/*/; do
+    dest="$tmphome/.claude/skills/$(basename "${skill%/}")"
+    if [ ! -L "$dest" ]; then
+      echo "install.sh did not link ${skill%/} into ~/.claude/skills"
+      status=1
+    elif [ "$(readlink -f "$dest")" != "$(readlink -f "${skill%/}")" ]; then
+      echo "$dest resolves to $(readlink -f "$dest"), not to ${skill%/}"
+      status=1
+    fi
+  done
 
   rm -rf "$tmphome"
   return "$status"
